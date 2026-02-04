@@ -3,66 +3,84 @@ import { useState } from "react";
 function AdminLogin({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const handleLogin = async () => {
-    console.log("Login button clicked");
-    console.log("Email:", email);
-    console.log("Password:", password);
+  const CREDENTIALS = [
+    { email: "admin@school.edu", password: "admin123", role: "admin" },
+    { email: "teacher@school.edu", password: "teacher123", role: "teacher" },
+  ];
 
-    if (!email || !password) {
-      alert("Please enter email and password");
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError("");
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+
+    if (!normalizedEmail) {
+      setError("Please enter your email");
       return;
     }
 
-    try {
-      const res = await fetch("http://localhost:3000/api/admin/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+    if (!validateEmail(normalizedEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
 
-      console.log("Response status:", res.status);
+    if (!normalizedPassword) {
+      setError("Please enter your password");
+      return;
+    }
 
-      const data = await res.json();
-      console.log("Response data:", data);
-
-      if (res.ok) {
-        console.log("Logged in admin:", data.admin);
-        if (typeof onLogin === "function") onLogin(data.admin || null);
-      } else {
-        alert(data.message || "Login failed");
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      alert("Backend server not reachable");
+    const match = CREDENTIALS.find(
+      (c) => c.email.toLowerCase() === normalizedEmail && c.password === normalizedPassword
+    );
+    if (match) {
+      onLogin({ role: match.role, email: match.email });
+    } else {
+      setError("Invalid credentials");
     }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2>School Admin Login</h2>
+        <h2 style={{ textAlign: "center" }}>School Login</h2>
 
-        <input
-          type="email"
-          placeholder="admin@school.edu"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <input
+            type="email"
+            placeholder="admin@school.edu"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError("");
+            }}
+            style={styles.input}
+          />
 
-        <input
-          type="password"
-          placeholder="Enter password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            style={styles.input}
+          />
 
-        {/* IMPORTANT: type="button" */}
-        <button type="button" onClick={handleLogin}>
-          Login
-        </button>
+          {error && <div style={styles.error}>{error}</div>}
+
+          <button type="submit" style={styles.button}>
+            Login
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -85,7 +103,36 @@ const styles = {
     boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     display: "flex",
     flexDirection: "column",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
     gap: "12px",
+  },
+  input: {
+    padding: "12px",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+    fontSize: "14px",
+    outline: "none",
+  },
+  error: {
+    color: "#dc2626",
+    fontSize: "14px",
+    padding: "8px 12px",
+    backgroundColor: "#fef2f2",
+    borderRadius: "6px",
+    border: "1px solid #fecaca",
+  },
+  button: {
+    padding: "12px",
+    backgroundColor: "#2b6cb0",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "15px",
+    fontWeight: "500",
+    cursor: "pointer",
   },
 };
 

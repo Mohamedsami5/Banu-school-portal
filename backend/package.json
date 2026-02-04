@@ -2,6 +2,10 @@
   "name": "school-portal-backend",
   "private": true,
   "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "mongoose": "^7.0.0",

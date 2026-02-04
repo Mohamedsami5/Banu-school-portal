@@ -70,9 +70,109 @@ input:focus {
   border-color: #2f6fed;
 }
 
+/* Admin Login Form Styles */
+.admin-login-input:focus {
+  border-color: #2b6cb0 !important;
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1) !important;
+}
+
+.admin-login-button:hover {
+  background-color: #2563eb !important;
+  box-shadow: 0 4px 8px rgba(43, 108, 176, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+.admin-login-button:active {
+  background-color: #1e40af !important;
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(43, 108, 176, 0.2) !important;
+}
+
+.admin-login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Dashboard hover effects */
+.sidebar-item:hover {
+  transform: translateX(4px) !important;
+  opacity: 0.95;
+}
+
+.hamburger-button:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.05);
+}
+
+.logout-button:hover {
+  background: #d32f2f !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 83, 80, 0.3) !important;
+}
+
+.summary-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.3) !important;
+}
+
+.announcement-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15) !important;
+}
+
+.add-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+}
+
+.submit-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(67, 233, 123, 0.4) !important;
+}
+
+input:hover, textarea:hover, select:hover {
+  border-color: #667eea !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Table action buttons hover effects */
+.view-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3) !important;
+}
+
+.edit-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(79, 172, 254, 0.3) !important;
+}
+
+.delete-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(239, 83, 80, 0.3) !important;
+}
+
+/* Table row hover effect */
+.parent-table-row:hover {
+  background-color: #f8f9ff !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   input, button {
     font-size: 14px;
+  }
+  
+  .admin-login-card {
+    padding: 32px 24px !important;
+    max-width: 100% !important;
+  }
+  
+  .admin-login-heading {
+    font-size: 24px !important;
   }
 }

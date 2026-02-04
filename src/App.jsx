@@ -1,35 +1,32 @@
 import "./index.css";
 import { useState } from "react";
-import AdminLogin from "./AdminLogin";
-import AdminDashboard from "./AdminDashboard";
+import Login from "./Login";
+import AdminDashboard from "./pages/AdminDashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
 
 function App() {
-  const [admin, setAdmin] = useState(null);
+  const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
 
-  function handleLogin(adminData) {
-    // show temporary toast then navigate to dashboard
+  function handleLogin(userInfo) {
     setToast("Login successful");
     setTimeout(() => setToast(null), 2000);
-    // after a short delay navigate
-    setTimeout(() => setAdmin(adminData || { email: "admin@dev" }), 1000);
+    setUser(userInfo);
   }
 
   function handleLogout() {
-    setAdmin(null);
+    setUser(null);
   }
 
   return (
     <div>
-      {/* top-bar toast */}
-      {toast && (
-        <div style={styles.toast}>{toast}</div>
-      )}
-
-      {admin ? (
-        <AdminDashboard admin={admin} onLogout={handleLogout} />
+      {toast && <div style={styles.toast}>{toast}</div>}
+      {!user ? (
+        <Login onLogin={handleLogin} />
+      ) : user.role === "teacher" ? (
+        <TeacherDashboard teacher={user} onLogout={handleLogout} />
       ) : (
-        <AdminLogin onLogin={handleLogin} />
+        <AdminDashboard admin={user} onLogout={handleLogout} />
       )}
     </div>
   );
@@ -47,8 +44,7 @@ const styles = {
     borderRadius: 6,
     zIndex: 9999,
     boxShadow: "0 6px 18px rgba(20,30,60,0.12)",
-  }
+  },
 };
 
 export default App;
-
