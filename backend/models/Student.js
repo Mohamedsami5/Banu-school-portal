@@ -20,11 +20,14 @@ const studentSchema = new mongoose.Schema({
   },
   section: {
     type: String,
+    required: true,
     trim: true,
+    enum: ["A", "B", "C"],
     default: "A"
   },
   rollNo: {
     type: String,
+    required: true,
     trim: true
   },
   parentName: {
@@ -39,5 +42,8 @@ const studentSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Ensure rollNo is unique within a class (compound unique index)
+studentSchema.index({ className: 1, rollNo: 1 }, { unique: true, partialFilterExpression: { rollNo: { $exists: true, $ne: "" }, className: { $exists: true } } });
 
 export default mongoose.model("Student", studentSchema);

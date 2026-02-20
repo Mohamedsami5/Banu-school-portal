@@ -10,11 +10,15 @@ export default function ManageParents() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedParent, setSelectedParent] = useState(null);
+  const CLASS_OPTIONS = ["LKG","UKG", ...Array.from({length:12}, (_,i)=>String(i+1))];
+  const SECTION_OPTIONS = ["A","B","C"];
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     studentName: "",
-    className: ""
+    className: "",
+    section: "A"
   });
   const [error, setError] = useState("");
 
@@ -51,7 +55,8 @@ export default function ManageParents() {
         name: p.name,
         email: p.email,
         studentName: p.studentName,
-        className: p.className
+        className: p.className,
+        section: p.section || "A"
       }));
 
       setParents(formattedData);
@@ -91,7 +96,7 @@ export default function ManageParents() {
           p.id === selectedParent.id ? { ...formData, id: selectedParent.id } : p
         )
       );
-      setFormData({ name: "", email: "", studentName: "", className: "" });
+      setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
       setShowForm(false);
       setShowModal(false);
       setSelectedParent(null);
@@ -121,10 +126,11 @@ export default function ManageParents() {
           name: saved.name,
           email: saved.email,
           studentName: saved.studentName,
-          className: saved.className
+          className: saved.className,
+          section: saved.section || "A"
         }
       ]);
-      setFormData({ name: "", email: "", studentName: "", className: "" });
+      setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
       setShowForm(false);
       setShowModal(false);
       setSelectedParent(null);
@@ -141,7 +147,8 @@ export default function ManageParents() {
       name: parent.name,
       email: parent.email,
       studentName: parent.studentName,
-      className: parent.className
+      className: parent.className,
+      section: parent.section || "A"
     });
     setShowModal(true);
     setShowForm(false);
@@ -153,7 +160,8 @@ export default function ManageParents() {
       name: parent.name,
       email: parent.email,
       studentName: parent.studentName,
-      className: parent.className
+      className: parent.className,
+      section: parent.section || "A"
     });
     setShowForm(true);
     setShowModal(false);
@@ -190,7 +198,7 @@ export default function ManageParents() {
   };
 
   const handleCancel = () => {
-    setFormData({ name: "", email: "", studentName: "", className: "" });
+    setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
     setShowForm(false);
     setShowModal(false);
     setSelectedParent(null);
@@ -248,14 +256,20 @@ export default function ManageParents() {
               required
               style={styles.input}
             />
-            <input
-              type="text"
-              placeholder="Class (e.g., 5-A)"
-              value={formData.className}
-              onChange={(e) => setFormData({ ...formData, className: e.target.value })}
-              required
-              style={styles.input}
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <select value={formData.className} onChange={(e) => setFormData({ ...formData, className: e.target.value })} style={styles.input} required>
+                <option value="">Select Class</option>
+                {CLASS_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select value={formData.section} onChange={(e) => setFormData({ ...formData, section: e.target.value })} style={styles.input} required>
+                <option value="">Select Section</option>
+                {SECTION_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
             <div style={styles.buttonGroup}>
               <button
                 type="button"
@@ -323,6 +337,10 @@ export default function ManageParents() {
               <div style={styles.detailRow}>
                 <strong>Class:</strong>
                 <span>{selectedParent.className}</span>
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Section:</strong>
+                <span>{selectedParent.section || "A"}</span>
               </div>
             </div>
             <div style={styles.modalFooter}>

@@ -32,17 +32,18 @@ router.post("/", async (req, res) => {
   try {
     checkMongoConnection();
 
-    const { name, email, studentName, className } = req.body;
+    const { name, email, studentName, className, section } = req.body;
 
-    if (!name || !email || !studentName || !className) {
-      return res.status(400).json({ message: "Name, email, studentName, and className are required" });
+    if (!name || !email || !studentName || !className || !section) {
+      return res.status(400).json({ message: "Name, email, studentName, className and section are required" });
     }
 
     const parent = new Parent({
       name,
       email,
       studentName,
-      className
+      className,
+      section
     });
 
     const savedParent = await parent.save();

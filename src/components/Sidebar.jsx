@@ -1,15 +1,21 @@
 import React from "react";
 
 const defaultItems = [
-  { id: "overview", label: "Dashboard", icon: "📊", color: "#667eea" },
-  { id: "teachers", label: "Manage Teachers", icon: "👨‍🏫", color: "#f093fb" },
-  { id: "students", label: "Manage Students", icon: "👨‍🎓", color: "#4facfe" },
-  { id: "parents", label: "Manage Parents", icon: "👨‍👩‍👧", color: "#43e97b" },
-  { id: "announcements", label: "Announcements", icon: "📢", color: "#fa709a" },
-  { id: "logout", label: "Logout", icon: "🚪", color: "#ef5350" },
+  { id: "overview", label: "Dashboard", color: "#667eea" },
+  { id: "teachers", label: "Manage Teachers", color: "#f093fb" },
+  { id: "students", label: "Manage Students", color: "#4facfe" },
+  { id: "parents", label: "Manage Parents", color: "#43e97b" },
+  { id: "announcements", label: "Announcements", color: "#fa709a" },
+  { id: "marks", label: "Marks Approval", color: "#ff9800" }, // ✅ Added
+  { id: "logout", label: "Logout", color: "#ef5350" },
 ];
 
-export default function Sidebar({ items = defaultItems, active, onNavigate, isCollapsed = false }) {
+export default function Sidebar({
+  items = defaultItems,
+  active,
+  onNavigate,
+  isCollapsed = false,
+}) {
   return (
     <aside
       style={{
@@ -21,25 +27,34 @@ export default function Sidebar({ items = defaultItems, active, onNavigate, isCo
       <nav style={styles.nav}>
         {items.map((it) => {
           const isActive = active === it.id;
+
           return (
             <div
               key={it.id}
-              className="sidebar-item"
               style={{
                 ...styles.item,
-                padding: isCollapsed ? '14px' : '14px 16px',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
-                ...(isActive ? { ...styles.active, background: `${it.color}15`, borderLeft: `4px solid ${it.color}` } : {}),
+                padding: isCollapsed ? "14px" : "14px 16px",
+                justifyContent: isCollapsed ? "center" : "flex-start",
+                ...(isActive
+                  ? {
+                      ...styles.active,
+                      background: `${it.color}15`,
+                      borderLeft: `4px solid ${it.color}`,
+                    }
+                  : {}),
               }}
               onClick={() => onNavigate(it.id)}
-              title={isCollapsed ? it.label : ''}
+              title={isCollapsed ? it.label : ""}
             >
-              <span style={styles.icon}>{it.icon}</span>
               {!isCollapsed && (
-                <span style={{
-                  ...styles.label,
-                  ...(isActive ? { color: it.color, fontWeight: 600 } : {}),
-                }}>
+                <span
+                  style={{
+                    ...styles.label,
+                    ...(isActive
+                      ? { color: it.color, fontWeight: 600 }
+                      : {}),
+                  }}
+                >
                   {it.label}
                 </span>
               )}
@@ -63,34 +78,25 @@ const styles = {
     flexShrink: 0,
   },
   nav: {
-    display: 'flex',
-    flexDirection: 'column',
+    display: "flex",
+    flexDirection: "column",
     gap: 8,
   },
   item: {
     borderRadius: 12,
-    cursor: 'pointer',
-    color: '#213547',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    transition: 'all 0.2s ease',
-    position: 'relative',
-  },
-  icon: {
-    fontSize: 20,
-    minWidth: 24,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    cursor: "pointer",
+    color: "#213547",
+    display: "flex",
+    alignItems: "center",
+    transition: "all 0.2s ease",
   },
   label: {
     fontSize: 14,
-    color: '#425266',
-    transition: 'all 0.2s ease',
+    color: "#425266",
+    transition: "all 0.2s ease",
   },
   active: {
     fontWeight: 600,
-    transform: 'translateX(2px)',
+    transform: "translateX(2px)",
   },
 };

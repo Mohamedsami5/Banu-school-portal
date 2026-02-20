@@ -1,0 +1,143 @@
+.home-page {
+  width: 100%;
+}
+
+/* Milestone Section */
+.milestone {
+  text-align: center;
+  padding: 32px;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.milestone:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 40px rgba(79, 172, 254, 0.15);
+}
+
+.milestone-number {
+  font-size: 48px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+
+.milestone-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* Admissions Section */
+.admissions-content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(79, 172, 254, 0.1);
+  border-top: 4px solid #4facfe;
+}
+
+.admissions-content h3 {
+  font-size: 28px;
+  color: #1f2937;
+  margin: 0 0 24px 0;
+  text-align: center;
+}
+
+.admissions-list {
+  list-style: none;
+  margin: 0 0 32px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admissions-list li {
+  font-size: 16px;
+  color: #4b5563;
+  padding-left: 8px;
+}
+
+.admissions-button {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+}
+
+.admissions-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(79, 172, 254, 0.4);
+}
+
+/* Contact Section */
+.contact-wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.contact-card {
+  padding: 32px 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(79, 172, 254, 0.05) 0%, rgba(0, 242, 254, 0.05) 100%);
+  border: 1px solid rgba(79, 172, 254, 0.2);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.contact-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 40px rgba(79, 172, 254, 0.15);
+  border-color: #4facfe;
+}
+
+.contact-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.contact-card h4 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.contact-card p {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .admissions-content {
+    padding: 24px;
+  }
+
+  .admissions-content h3 {
+    font-size: 22px;
+  }
+
+  .contact-wrapper {
+    grid-template-columns: 1fr;
+  }
+}

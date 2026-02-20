@@ -5,9 +5,11 @@ export default function StudentsTable({ data = [], onView, onEdit, onDelete }) {
     <table style={styles.table}>
       <thead>
         <tr>
+          <th style={styles.th}>Roll No</th>
           <th style={styles.th}>Name</th>
           <th style={styles.th}>Email</th>
           <th style={styles.th}>Class</th>
+          <th style={styles.th}>Section</th>
           <th style={styles.th}>Parent Name</th>
           <th style={styles.th}>Parent Email</th>
           <th style={styles.th}>Actions</th>
@@ -16,11 +18,13 @@ export default function StudentsTable({ data = [], onView, onEdit, onDelete }) {
       <tbody>
         {data.map((student) => (
           <tr key={student._id || student.id} className="parent-table-row" style={styles.tr}>
+            <td style={styles.td}>{student.rollNo}</td>
             <td style={styles.td}>{student.name}</td>
             <td style={styles.td}>{student.email}</td>
             <td style={styles.td}>{student.className}</td>
-            <td style={styles.td}>{student.parentName || "-"}</td>
-            <td style={styles.td}>{student.parentEmail || "-"}</td>
+            <td style={styles.td}>{student.section || "A"}</td>
+            <td style={styles.td}>{student.parentName}</td>
+            <td style={styles.td}>{student.parentEmail}</td>
             <td style={styles.td}>
               <div style={styles.actions}>
                 <button 

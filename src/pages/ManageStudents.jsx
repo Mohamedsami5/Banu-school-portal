@@ -3,6 +3,9 @@ import StudentsTable from "../components/StudentsTable";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
+const CLASS_OPTIONS = ["LKG","UKG", ...Array.from({length:12}, (_,i)=>String(i+1))];
+const SECTION_OPTIONS = ["A","B","C"];
+
 export default function ManageStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,11 +15,13 @@ export default function ManageStudents() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [formData, setFormData] = useState({
+    rollNo: "",
     name: "",
     email: "",
     className: "",
+    section: "A",
     parentName: "",
-    parentEmail: ""
+    parentEmail: "",
   });
 
   // Fetch students from API
@@ -69,27 +74,64 @@ export default function ManageStudents() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/students`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to add student");
+    // Basic client-side validation
+    if (!formData.rollNo || !String(formData.rollNo).trim()) {
+      setError("Roll No is required");
+      return;
+    }
+    if (!formData.className || !String(formData.className).trim()) {
+      setError("Class is required");
+      return;
+    }
+    if (!formData.section || !String(formData.section).trim()) {
+      setError("Section is required");
+      return;
+    }
+
+    // Unique check client-side to provide fast feedback
+    const duplicate = students.find(s => s.className === String(formData.className).trim() && s.rollNo === String(formData.rollNo).trim() && ((selectedStudent && (s._id || s.id) !== (selectedStudent._id || selectedStudent.id)) || !selectedStudent));
+    if (duplicate) {
+      setError("Roll number already exists for this class");
+      return;
+    }
+
+    try {
+      console.log("Submitting rollNo:", formData.rollNo, "class:", formData.className);
+
+      let res;
+      if (selectedStudent && (selectedStudent._id || selectedStudent.id)) {
+        // Update existing student
+        const id = selectedStudent._id || selectedStudent.id;
+        res = await fetch(`${API_BASE_URL}/students/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData)
+        });
+      } else {
+        // Create new student
+        res = await fetch(`${API_BASE_URL}/students`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData)
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
+      console.log("Student submit response:", res.status, data);
+
+      if (!res.ok) {
+        throw new Error(data.message || `Failed to ${selectedStudent ? 'update' : 'add'} student`);
       }
 
       // Reset form and refresh list
-      setFormData({ name: "", email: "", className: "", parentName: "", parentEmail: "" });
+      setFormData({ rollNo: "", name: "", email: "", className: "", parentName: "", parentEmail: "" });
       setShowForm(false);
+      setSelectedStudent(null);
       fetchStudents();
     } catch (err) {
-      setError(err.message);
-      console.error("Error adding student:", err);
+      setError(err.message || "Failed to submit student");
+      console.error("Error adding/updating student:", err);
     }
   };
 
@@ -102,9 +144,11 @@ export default function ManageStudents() {
   const handleEdit = (student) => {
     setSelectedStudent(student);
     setFormData({
+      rollNo: student.rollNo || "",
       name: student.name,
       email: student.email,
       className: student.className,
+      section: student.section || "A",
       parentName: student.parentName || "",
       parentEmail: student.parentEmail || ""
     });
@@ -113,32 +157,45 @@ export default function ManageStudents() {
   };
 
   const handleDeleteClick = (student) => {
+    console.log("Delete clicked for student:", student._id || student.id, student.name);
     setSelectedStudent(student);
     setShowDeleteConfirm(true);
   };
 
   const handleDeleteConfirm = async () => {
-    if (selectedStudent) {
-      try {
-        // Note: Backend delete API would go here if implemented
-        // For now, we'll just remove from state (frontend-only)
-        setStudents(prevStudents => prevStudents.filter(s => (s._id || s.id) !== (selectedStudent._id || selectedStudent.id)));
-        setShowDeleteConfirm(false);
-        setSelectedStudent(null);
-      } catch (err) {
-        setError(err.message || "Failed to delete student");
-        console.error("Error deleting student:", err);
+    if (!selectedStudent) return;
+    const idToDelete = selectedStudent._id || selectedStudent.id;
+    console.log("Deleting student id:", idToDelete);
+    try {
+      const res = await fetch(`${API_BASE_URL}/students/${idToDelete}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await res.json().catch(() => ({}));
+      console.log("Delete response:", res.status, data);
+      if (!res.ok) {
+        throw new Error(data.message || `Failed to delete student (${res.status})`);
       }
+      // Refresh list from server
+      setShowDeleteConfirm(false);
+      setSelectedStudent(null);
+      fetchStudents();
+    } catch (err) {
+      setError(err.message || "Failed to delete student");
+      console.error("Error deleting student:", err);
     }
   };
 
   const handleCancel = () => {
-    setFormData({ name: "", email: "", className: "", parentName: "", parentEmail: "" });
+    setFormData({ rollNo: "", name: "", email: "", className: "", parentName: "", parentEmail: "" });
     setShowForm(false);
     setShowModal(false);
     setSelectedStudent(null);
     setError("");
   };
+
+  // Disable submit unless all required fields have content
+  const isSubmitDisabled = !String(formData.rollNo || '').trim() || !String(formData.name || '').trim() || !String(formData.email || '').trim() || !String(formData.className || '').trim() || !String(formData.section || '').trim();
 
   return (
     <div>
@@ -167,6 +224,16 @@ export default function ManageStudents() {
             {selectedStudent ? "Edit Student" : "Add New Student"}
           </h3>
           <form onSubmit={handleSubmit} style={styles.form}>
+
+             <input
+              type="text"
+              placeholder="Roll No"
+              value={formData.rollNo}
+              onChange={(e) => setFormData({ ...formData, rollNo: e.target.value })}
+              required
+              style={styles.input}
+            />
+
             <input
               type="text"
               placeholder="Student Name"
@@ -183,14 +250,30 @@ export default function ManageStudents() {
               required
               style={styles.input}
             />
-            <input
-              type="text"
-              placeholder="Class (e.g., 5-A)"
-              value={formData.className}
-              onChange={(e) => setFormData({ ...formData, className: e.target.value })}
-              required
-              style={styles.input}
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <select
+                value={formData.className}
+                onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                required
+                style={styles.input}
+              >
+                <option value="">Select Class</option>
+                {CLASS_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select
+                value={formData.section}
+                onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                required
+                style={styles.input}
+              >
+                <option value="">Select Section</option>
+                {SECTION_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
             <input
               type="text"
               placeholder="Parent Name (optional)"
@@ -215,7 +298,12 @@ export default function ManageStudents() {
               </button>
               <button
                 type="submit"
-                style={styles.submitButton}
+                style={{
+                  ...styles.submitButton,
+                  opacity: isSubmitDisabled ? 0.6 : 1,
+                  cursor: isSubmitDisabled ? 'not-allowed' : 'pointer'
+                }}
+                disabled={isSubmitDisabled}
               >
                 {selectedStudent ? "Update Student" : "Add Student"}
               </button>
@@ -257,6 +345,11 @@ export default function ManageStudents() {
               </button>
             </div>
             <div style={styles.modalContent}>
+
+              <div style={styles.detailRow}>
+                <strong>Roll No:</strong>
+                <span>{selectedStudent.rollNo}</span>
+              </div>
               <div style={styles.detailRow}>
                 <strong>Student Name:</strong>
                 <span>{selectedStudent.name}</span>
@@ -269,13 +362,15 @@ export default function ManageStudents() {
                 <strong>Class:</strong>
                 <span>{selectedStudent.className}</span>
               </div>
-              <div style={styles.detailRow}>
-                <strong>Parent Name:</strong>
-                <span>{selectedStudent.parentName || "-"}</span>
+              <div style={styles.detailRow}>                <strong>Section:</strong>
+                <span>{selectedStudent.section || "A"}</span>
+              </div>
+              <div style={styles.detailRow}>                <strong>Parent Name:</strong>
+                <span>{selectedStudent.parentName}</span>
               </div>
               <div style={styles.detailRow}>
                 <strong>Parent Email:</strong>
-                <span>{selectedStudent.parentEmail || "-"}</span>
+                <span>{selectedStudent.parentEmail}</span>
               </div>
             </div>
             <div style={styles.modalFooter}>

@@ -1,34 +1,54 @@
 import "./index.css";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useState } from "react";
-import Login from "./Login";
+
+// Pages
+import HomePage from "./pages/HomePage";
+import PublicLoginPage from "./pages/PublicLoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
+import TeacherLayout from "./pages/TeacherLayout";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import TeacherProfile from "./pages/TeacherProfile";
+import TeacherFeedback from "./pages/TeacherFeedback";
+import AssignClasses from "./pages/AssignClasses";
+import EnterMarks from "./pages/EnterMarks";
+import Homework from "./pages/Homework";
+import ParentFeedback from "./pages/ParentFeedback";
+import StudentFeedback from "./pages/StudentFeedback";
 
 function App() {
-  const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
 
-  function handleLogin(userInfo) {
-    setToast("Login successful");
-    setTimeout(() => setToast(null), 2000);
-    setUser(userInfo);
-  }
-
-  function handleLogout() {
-    setUser(null);
-  }
-
   return (
-    <div>
+    <Router>
       {toast && <div style={styles.toast}>{toast}</div>}
-      {!user ? (
-        <Login onLogin={handleLogin} />
-      ) : user.role === "teacher" ? (
-        <TeacherDashboard teacher={user} onLogout={handleLogout} />
-      ) : (
-        <AdminDashboard admin={user} onLogout={handleLogout} />
-      )}
-    </div>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<PublicLoginPage />} />
+
+        {/* Admin Dashboard */}
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+        {/* Teacher Layout */}
+        <Route path="/teacher" element={<TeacherLayout />}>
+          <Route index element={<TeacherDashboard />} />
+          <Route path="dashboard" element={<TeacherDashboard />} />
+          <Route path="profile" element={<TeacherProfile />} />
+          <Route path="feedback" element={<TeacherFeedback />} />
+          <Route path="assign-classes" element={<AssignClasses />} />
+          <Route path="marks" element={<EnterMarks />} />
+          <Route path="homework" element={<Homework />} />
+        </Route>
+
+        {/* Parent / Student */}
+        <Route path="/parent/feedback" element={<ParentFeedback />} />
+        <Route path="/student/feedback" element={<StudentFeedback />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 
@@ -43,7 +63,6 @@ const styles = {
     padding: "0.5rem 1rem",
     borderRadius: 6,
     zIndex: 9999,
-    boxShadow: "0 6px 18px rgba(20,30,60,0.12)",
   },
 };
 

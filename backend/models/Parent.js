@@ -21,6 +21,13 @@ const parentSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true
+  },
+  section: {
+    type: String,
+    required: true,
+    trim: true,
+    enum: ["A", "B", "C"],
+    default: "A"
   }
 }, {
   timestamps: true

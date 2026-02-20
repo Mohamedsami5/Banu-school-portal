@@ -3,17 +3,22 @@ import TeachersTable from "../components/TeachersTable";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-// Subjects for Class 1–10
+// Subjects for primary and senior classes
 const SUBJECTS_PRIMARY = ["Tamil", "English", "Maths", "Science", "Social Science", "Computer Science"];
-// Subjects for Class 11–12
 const SUBJECTS_SENIOR = ["Tamil", "English", "Maths", "Physics", "Chemistry", "Biology", "Computer Science"];
 
-const CLASS_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `Class ${i + 1}` }));
+// Class dropdown options (LKG, UKG, 1–12)
+const CLASS_OPTIONS = [
+  { value: "LKG", label: "LKG" },
+  { value: "UKG", label: "UKG" },
+  ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `Class ${i + 1}` }))
+];
 
 function getSubjectsForClass(selectedClass) {
   if (!selectedClass) return [];
+  if (selectedClass === "LKG" || selectedClass === "UKG") return SUBJECTS_PRIMARY;
   const num = parseInt(selectedClass, 10);
-  if (num >= 1 && num <= 10) return SUBJECTS_PRIMARY;
+  if (!isNaN(num) && num >= 1 && num <= 10) return SUBJECTS_PRIMARY;
   if (num === 11 || num === 12) return SUBJECTS_SENIOR;
   return [];
 }
@@ -22,19 +27,53 @@ export default function ManageTeachers() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState("add"); // "add" | "edit"
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [credentialPassword, setCredentialPassword] = useState("");
+  const [credentialEmail, setCredentialEmail] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [formData, setFormData] = useState({
+  const [editTeacherId, setEditTeacherId] = useState("");
+
+  // Initial empty teacher form state (used for add mode)
+  const INITIAL_TEACHER_FORM = {
     name: "",
     email: "",
     password: "",
-    teaching: [{ class: "", section: "A", subject: "" }],
-    status: "Active"
-  });
+    teaching: [{ className: "", section: "A", subject: "" }],
+    status: "Active",
+    dateOfJoining: ""
+  };
 
-  const subjectOptionsForClass = (cls) => getSubjectsForClass(cls);
+  const [formData, setFormData] = useState(INITIAL_TEACHER_FORM);
+
+  const subjectOptionsForClass = (cls) => getSubjectsForClass(cls); // cls is className value (LKG, UKG, 1..12)
+
+  const clearMessages = () => {
+    setError("");
+    setSuccessMessage("");
+  };
+  const showSuccess = (msg) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(""), 3000);
+  };
+
+  const resetForm = () => {
+    // Clear form state for Add Teacher (do not change `mode` here)
+    setFormData(INITIAL_TEACHER_FORM);
+    setSelectedTeacher(null);
+    setEditTeacherId("");
+    setCredentialPassword("");
+    setCredentialEmail("");
+    setCredentialConfirm("");
+    setShowPasswordModal(false);
+    setShowEmailModal(false);
+    clearMessages();
+  };
 
   // Fetch teachers from API
   useEffect(() => {
@@ -69,11 +108,13 @@ export default function ManageTeachers() {
       // Empty array is a valid successful response
       const formattedData = data.map(teacher => ({
         id: teacher._id,
+        _id: teacher._id,
         name: teacher.name,
         email: teacher.email,
         subject: teacher.subject,
         teaching: teacher.teaching || [],
-        status: teacher.status
+        status: teacher.status,
+        dateOfJoining: teacher.dateOfJoining
       }));
       
       // Successfully loaded data (even if empty) - clear any previous errors
@@ -96,42 +137,78 @@ export default function ManageTeachers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    clearMessages();
     try {
-      const { teaching, ...rest } = formData;
-      const payload = { ...rest };
-      if (!selectedTeacher && (!payload.password || !payload.password.trim())) {
+      const validTeaching = (formData.teaching || [])
+        .filter((t) => t && String(t.className).trim() && String(t.subject).trim())
+        .map((t) => ({ className: t.className, section: t.section || "A", subject: t.subject }));
+
+      if (mode === "edit" && editTeacherId) {
+      // Format dateOfJoining for API (convert empty string to null)
+      const dateOfJoiningValue = formData.dateOfJoining && formData.dateOfJoining.trim() 
+        ? formData.dateOfJoining.trim() 
+        : null;
+
+      const response = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/classes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          teaching: validTeaching, 
+          status: formData.status,
+          dateOfJoining: dateOfJoiningValue
+        })
+      });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || "Failed to update teacher");
+        }
+        showSuccess("Teacher updated successfully.");
+        setShowForm(false);
+        setEditTeacherId("");
+        setSelectedTeacher(null);
+        fetchTeachers();
+        return;
+      }
+
+      if (!formData.password || !formData.password.trim()) {
         setError("Teacher password is required");
         return;
       }
-      const validTeaching = Array.isArray(teaching)
-        ? teaching.filter((t) => t && String(t.class).trim() && String(t.subject).trim())
-        : [];
-      if (!selectedTeacher && validTeaching.length === 0) {
-        setError("At least one class/section/subject assignment is required");
+      if (validTeaching.length === 0) {
+        setError("At least one Assign Class & Subjects row is required");
         return;
       }
-      payload.teaching = validTeaching;
-      if (selectedTeacher) delete payload.password;
-      const response = await fetch(`${API_BASE_URL}/teachers`, {
+
+      // Format dateOfJoining for API (convert empty string to null)
+      const dateOfJoiningValue = formData.dateOfJoining && formData.dateOfJoining.trim() 
+        ? formData.dateOfJoining.trim() 
+        : null;
+
+      const response = await fetch(`${API_BASE_URL}/admin/teachers`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          teaching: validTeaching,
+          status: formData.status,
+          dateOfJoining: dateOfJoiningValue
+        })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to add teacher");
       }
 
-      setFormData({ name: "", email: "", password: "", teaching: [{ class: "", section: "A", subject: "" }], status: "Active" });
+      showSuccess("Teacher added successfully.");
+      resetForm();
       setShowForm(false);
       fetchTeachers();
     } catch (err) {
       setError(err.message);
-      console.error("Error adding teacher:", err);
+      console.error(err);
     }
   };
 
@@ -141,21 +218,110 @@ export default function ManageTeachers() {
     setShowForm(false);
   };
 
-  const handleEdit = (teacher) => {
+  const openAddMode = () => {
+    resetForm();
+    setMode("add");
+    setShowForm(true);
+  };
+
+  const openEditMode = () => {
+    resetForm();
+    setMode("edit");
+    setShowForm(true);
+  };
+
+  const [credentialConfirm, setCredentialConfirm] = useState("");
+
+  const handleEditSelectTeacher = (teacherId) => {
+    const teacher = teachers.find((t) => t.id === teacherId);
+    if (!teacher) return;
+    setEditTeacherId(teacherId);
     setSelectedTeacher(teacher);
     const teaching = Array.isArray(teacher.teaching) && teacher.teaching.length > 0
-      ? teacher.teaching.map((t) => ({ class: t.class || "", section: t.section || "A", subject: t.subject || "" }))
-      : [{ class: "", section: "A", subject: "" }];
+      ? teacher.teaching.map((t) => ({ className: t.className || t.class || "", section: t.section || "A", subject: t.subject || "" }))
+      : [{ className: "", section: "A", subject: "" }];
+    // Format dateOfJoining for input (YYYY-MM-DD)
+    const formatDateForInput = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().split("T")[0];
+    };
+
     setFormData({
       name: teacher.name,
       email: teacher.email,
       password: "",
       teaching,
-      status: teacher.status || "Active"
+      status: teacher.status || "Active",
+      dateOfJoining: formatDateForInput(teacher.dateOfJoining)
     });
-    setShowForm(true);
-    setShowModal(false);
   };
+
+  const handleEdit = (teacher) => {
+    resetForm();
+    setMode("edit");
+    setShowForm(true);
+    if (teacher?.id) handleEditSelectTeacher(teacher.id);
+  };
+
+  const handleChangePassword = async () => {
+    if (!editTeacherId || !credentialPassword.trim()) {
+      setError("Enter a new password");
+      return;
+    }
+    if (credentialConfirm !== "CONFIRM") {
+      setError("Admin confirmation is required (type CONFIRM)");
+      return;
+    }
+    clearMessages();
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/credentials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: credentialPassword.trim() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to update password");
+      showSuccess("Password updated successfully.");
+      setShowPasswordModal(false);
+      setCredentialPassword("");
+      setCredentialConfirm("");
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    if (!editTeacherId || !credentialEmail.trim()) {
+      setError("Enter a new email");
+      return;
+    }
+    if (credentialConfirm !== "CONFIRM") {
+      setError("Admin confirmation is required (type CONFIRM)");
+      return;
+    }
+    clearMessages();
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/credentials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: credentialEmail.trim() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to update email");
+      showSuccess("Email updated successfully.");
+      setShowEmailModal(false);
+      setCredentialEmail("");
+      setCredentialConfirm("");
+      fetchTeachers();
+      const updated = { ...selectedTeacher, email: credentialEmail.trim() };
+      setSelectedTeacher(updated);
+      setFormData((prev) => ({ ...prev, email: updated.email }));
+    } catch (err) {
+      setError(err.message);
+    }
+  }; 
 
   const updateTeaching = (index, field, value) => {
     setFormData((prev) => ({
@@ -168,7 +334,7 @@ export default function ManageTeachers() {
   const addTeachingRow = () => {
     setFormData((prev) => ({
       ...prev,
-      teaching: [...prev.teaching, { class: "", section: "A", subject: "" }]
+      teaching: [...prev.teaching, { className: "", section: "A", subject: "" }]
     }));
   };
   const removeTeachingRow = (index) => {
@@ -179,30 +345,40 @@ export default function ManageTeachers() {
   };
 
   const handleDeleteClick = (teacher) => {
+    console.log("Delete clicked for teacher:", teacher._id || teacher.id, teacher.name);
     setSelectedTeacher(teacher);
     setShowDeleteConfirm(true);
   };
 
   const handleDeleteConfirm = async () => {
-    if (selectedTeacher) {
-      try {
-        // Note: Backend delete API would go here if implemented
-        // For now, we'll just remove from state (frontend-only)
-        setTeachers(prevTeachers => prevTeachers.filter(t => t.id !== selectedTeacher.id));
-        setShowDeleteConfirm(false);
-        setSelectedTeacher(null);
-      } catch (err) {
-        setError(err.message || "Failed to delete teacher");
-        console.error("Error deleting teacher:", err);
+    if (!selectedTeacher) return;
+    const idToDelete = selectedTeacher._id || selectedTeacher.id;
+    console.log("Deleting teacher id:", idToDelete);
+    try {
+      const res = await fetch(`${API_BASE_URL}/teachers/${idToDelete}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await res.json().catch(() => ({}));
+      console.log("Delete response:", res.status, data);
+      if (!res.ok) {
+        throw new Error(data.message || `Failed to delete teacher (${res.status})`);
       }
+      showSuccess("Teacher deleted successfully.");
+      setShowDeleteConfirm(false);
+      setSelectedTeacher(null);
+      // Refresh the list from server
+      fetchTeachers();
+    } catch (err) {
+      setError(err.message || "Failed to delete teacher");
+      console.error("Error deleting teacher:", err);
     }
   };
 
   const handleCancel = () => {
-    setFormData({ name: "", email: "", password: "", teaching: [{ class: "", section: "A", subject: "" }], status: "Active" });
+    resetForm();
     setShowForm(false);
     setShowModal(false);
-    setSelectedTeacher(null);
     setError("");
   };
 
@@ -212,8 +388,7 @@ export default function ManageTeachers() {
         <h2 style={styles.title}>Manage Teachers</h2>
         <button
           onClick={() => {
-            handleCancel();
-            setShowForm(!showForm);
+            if (showForm) handleCancel(); else openAddMode();
           }}
           style={styles.addButton}
         >
@@ -230,46 +405,85 @@ export default function ManageTeachers() {
       {showForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitle}>
-            {selectedTeacher ? "Edit Teacher" : "Add New Teacher"}
+            {mode === "edit" ? (!selectedTeacher ? "Edit Teacher — Select a teacher to edit" : "Edit Teacher") : "Add New Teacher"}
           </h3>
-          <form onSubmit={handleSubmit} style={styles.form}>
+          <form onSubmit={handleSubmit} style={styles.form} autoComplete="off" noValidate>
+            {/* Hidden dummy fields to deter browser autofill */}
+            <input type="text" name="fake-username" autoComplete="username" style={{ display: "none" }} />
+            <input type="password" name="fake-password" autoComplete="new-password" style={{ display: "none" }} />
+            {mode === "edit" && !selectedTeacher ? (
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <select
+                  value={editTeacherId}
+                  onChange={(e) => setEditTeacherId(e.target.value)}
+                  style={styles.input}
+                >
+                  <option value="">Select a teacher</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} — {t.email}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { if (editTeacherId) handleEditSelectTeacher(editTeacherId); }}
+                  style={styles.submitButton}
+                >
+                  Select
+                </button>
+              </div>
+            ) : null}
+
             <input
               type="text"
+              name="teacher-name"
+              autoComplete="off"
               placeholder="Name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
+              disabled={mode === "edit"}
               style={styles.input}
             />
             <input
               type="email"
+              name="teacher-email"
+              autoComplete="off"
               placeholder="Email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              disabled={mode === "edit"}
               style={styles.input}
             />
-            {!selectedTeacher && (
+            {mode === "add" && (
               <input
                 type="password"
+                name="teacher-password"
+                autoComplete="new-password"
                 placeholder="Password (for teacher login)"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required={!selectedTeacher}
+                required={mode === "add"}
                 style={styles.input}
               />
             )}
+
+            {successMessage && (
+              <div style={styles.success}>
+                {successMessage}
+              </div>
+            )} 
             <div style={styles.teachingSection}>
               <div style={styles.teachingHeader}>
-                <span style={styles.teachingTitle}>Class / Section / Subject assignments</span>
-                <button type="button" onClick={addTeachingRow} style={styles.addRowButton}>+ Add assignment</button>
-              </div>
+                <span style={styles.teachingTitle}>Assign Class & Subjects</span>
+                <button type="button" onClick={addTeachingRow} style={styles.addRowButton}>+ Add class/subject</button>
+              </div> 
               {formData.teaching.map((row, index) => (
                 <div key={index} style={styles.teachingRow}>
                   <select
-                    value={row.class}
-                    onChange={(e) => updateTeaching(index, "class", e.target.value)}
-                    required={index === 0 && !selectedTeacher}
+                    value={row.className}
+                    onChange={(e) => updateTeaching(index, "className", e.target.value)}
+                    required={index === 0 && mode === "add"}
                     style={styles.input}
                   >
                     <option value="">Class</option>
@@ -289,12 +503,12 @@ export default function ManageTeachers() {
                   <select
                     value={row.subject}
                     onChange={(e) => updateTeaching(index, "subject", e.target.value)}
-                    required={index === 0 && !selectedTeacher}
+                    required={index === 0 && mode === "add"}
                     style={styles.input}
-                    disabled={!row.class}
+                    disabled={!row.className}
                   >
                     <option value="">Subject</option>
-                    {subjectOptionsForClass(row.class).map((sub) => (
+                    {subjectOptionsForClass(row.className).map((sub) => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
                   </select>
@@ -304,6 +518,16 @@ export default function ManageTeachers() {
                 </div>
               ))}
             </div>
+            {selectedTeacher && (
+              <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 12 }}>
+                <h4 style={{ margin: "8px 0 6px 0", fontSize: 15, color: "#213547" }}>Admin Actions</h4>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={() => setShowPasswordModal(true)} style={styles.adminButton}>Change Teacher Password</button>
+                  <button type="button" onClick={() => setShowEmailModal(true)} style={styles.adminButton}>Change Teacher Email</button>
+                </div>
+              </div>
+            )}
+
             <select
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value })}
@@ -313,6 +537,18 @@ export default function ManageTeachers() {
               <option value="On Leave">On Leave</option>
               <option value="Inactive">Inactive</option>
             </select>
+
+            <div style={styles.formGroupFull}>
+              <label style={styles.label}>Date of Joining</label>
+              <input
+                type="date"
+                value={formData.dateOfJoining}
+                onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
+                style={styles.input}
+                placeholder="Select date of joining"
+              />
+              <small style={styles.helpText}>Date when the teacher joined the school (Admin only)</small>
+            </div> 
             <div style={styles.buttonGroup}>
               <button
                 type="button"
@@ -325,7 +561,7 @@ export default function ManageTeachers() {
                 type="submit"
                 style={styles.submitButton}
               >
-                {selectedTeacher ? "Update Teacher" : "Add Teacher"}
+                {mode === "edit" ? "Update Teacher" : "Add Teacher"}
               </button>
             </div>
           </form>
@@ -374,12 +610,35 @@ export default function ManageTeachers() {
                 <span>{selectedTeacher.email}</span>
               </div>
               <div style={styles.detailRow}>
-                <strong>Subject:</strong>
-                <span>{selectedTeacher.subject}</span>
-              </div>
-              <div style={styles.detailRow}>
                 <strong>Status:</strong>
                 <span>{selectedTeacher.status}</span>
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Date of Joining:</strong>
+                <span>
+                  {selectedTeacher.dateOfJoining 
+                    ? new Date(selectedTeacher.dateOfJoining).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                    : "Not set"}
+                </span>
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Teaching Assignments:</strong>
+                <div style={styles.teachingAssignmentsList}>
+                  {Array.isArray(selectedTeacher.teaching) && selectedTeacher.teaching.length > 0 ? (
+                    <ul style={styles.assignmentList}>
+                      {selectedTeacher.teaching.map((assignment, idx) => (
+                        <li key={idx} style={styles.assignmentListItem}>
+                          <span style={styles.assignmentBadge}>
+                            {assignment.className} {assignment.section}
+                          </span>
+                          <span>{assignment.subject}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span style={styles.noAssignmentMessage}>No teaching assignments</span>
+                  )}
+                </div>
               </div>
             </div>
             <div style={styles.modalFooter}>
@@ -437,6 +696,48 @@ export default function ManageTeachers() {
           </div>
         </div>
       )}
+
+      {/* Admin change password modal */}
+      {showPasswordModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowPasswordModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Change Teacher Password (Admin)</h3>
+              <button style={styles.closeButton} onClick={() => setShowPasswordModal(false)}>×</button>
+            </div>
+            <div style={styles.modalContent}>
+              <p>Enter new password and type <strong>CONFIRM</strong> to authorize this admin action.</p>
+              <input type="password" placeholder="New password" value={credentialPassword} onChange={(e) => setCredentialPassword(e.target.value)} style={styles.input} />
+              <input type="text" placeholder="Type CONFIRM to authorize" value={credentialConfirm} onChange={(e) => setCredentialConfirm(e.target.value)} style={styles.input} />
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelModalButton} onClick={() => setShowPasswordModal(false)}>Cancel</button>
+              <button style={styles.editButton} onClick={handleChangePassword}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin change email modal */}
+      {showEmailModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowEmailModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Change Teacher Email (Admin)</h3>
+              <button style={styles.closeButton} onClick={() => setShowEmailModal(false)}>×</button>
+            </div>
+            <div style={styles.modalContent}>
+              <p>Enter new email and type <strong>CONFIRM</strong> to authorize this admin action.</p>
+              <input type="email" placeholder="New email" value={credentialEmail} onChange={(e) => setCredentialEmail(e.target.value)} style={styles.input} />
+              <input type="text" placeholder="Type CONFIRM to authorize" value={credentialConfirm} onChange={(e) => setCredentialConfirm(e.target.value)} style={styles.input} />
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelModalButton} onClick={() => setShowEmailModal(false)}>Cancel</button>
+              <button style={styles.editButton} onClick={handleChangeEmail}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )} 
     </div>
   );
 }
@@ -693,5 +994,59 @@ const styles = {
     cursor: "pointer",
     fontWeight: 600,
     fontSize: 14,
+  },
+  adminButton: {
+    padding: "8px 12px",
+    background: "#f3f4f6",
+    color: "#111827",
+    border: "1px solid #e5e7eb",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  success: {
+    padding: "12px 16px",
+    backgroundColor: "#ecfdf5",
+    color: "#065f46",
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  teachingAssignmentsList: {
+    marginTop: 12,
+    paddingLeft: 16,
+  },
+  assignmentList: {
+    listStyle: "none",
+    padding: 0,
+    margin: 0,
+  },
+  assignmentListItem: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    padding: "8px 0",
+    fontSize: 13,
+  },
+  assignmentBadge: {
+    display: "inline-block",
+    padding: "4px 10px",
+    borderRadius: 4,
+    backgroundColor: "#e3f2fd",
+    color: "#1976d2",
+    fontWeight: 600,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  },
+  noAssignmentMessage: {
+    color: "#999",
+    fontStyle: "italic",
+    fontSize: 13,
+  },
+  helpText: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+    fontStyle: "italic",
   },
 };

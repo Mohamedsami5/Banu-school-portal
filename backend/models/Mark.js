@@ -40,10 +40,16 @@ const markSchema = new mongoose.Schema({
   },
   status: {
     type: String,
+    enum: ["Pending", "Approved", "Rejected"],
     default: "Pending"
   }
-}, {
-  timestamps: true
-});
+}, { timestamps: true });
+
+
+// ✅ UNIQUE COMBINATION INDEX
+markSchema.index(
+  { rollNo: 1, className: 1, section: 1, subject: 1 },
+  { unique: true }
+);
 
 export default mongoose.model("Mark", markSchema);
