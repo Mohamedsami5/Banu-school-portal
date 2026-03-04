@@ -15,6 +15,7 @@ import EnterMarks from "./pages/EnterMarks";
 import Homework from "./pages/Homework";
 import ParentFeedback from "./pages/ParentFeedback";
 import StudentFeedback from "./pages/StudentFeedback";
+import StudentDashboard from "./pages/StudentDashboard";
 
 function App() {
   const [toast, setToast] = useState(null);
@@ -40,6 +41,9 @@ function App() {
           <Route path="marks" element={<EnterMarks />} />
           <Route path="homework" element={<Homework />} />
         </Route>
+
+        {/* Student Dashboard */}
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
 
         {/* Parent / Student */}
         <Route path="/parent/feedback" element={<ParentFeedback />} />

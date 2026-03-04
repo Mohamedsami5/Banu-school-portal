@@ -38,6 +38,11 @@ const studentSchema = new mongoose.Schema({
     type: String,
     trim: true,
     lowercase: true
+  },
+  password: {
+    type: String,
+    required: true,
+    trim: true
   }
 }, {
   timestamps: true

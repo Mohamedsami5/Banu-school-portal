@@ -23,6 +23,7 @@ export default function ManageStudents() {
     parentName: "",
     parentEmail: "",
   });
+  const [password, setPassword] = useState("");
 
   // Fetch students from API
   useEffect(() => {
@@ -96,6 +97,11 @@ export default function ManageStudents() {
       return;
     }
 
+    if (!selectedStudent && (!password || !String(password).trim())) {
+      setError("Password is required");
+      return;
+    }
+
     try {
       console.log("Submitting rollNo:", formData.rollNo, "class:", formData.className);
 
@@ -113,7 +119,7 @@ export default function ManageStudents() {
         res = await fetch(`${API_BASE_URL}/students`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
+          body: JSON.stringify({ ...formData, password })
         });
       }
 
@@ -125,7 +131,8 @@ export default function ManageStudents() {
       }
 
       // Reset form and refresh list
-      setFormData({ rollNo: "", name: "", email: "", className: "", parentName: "", parentEmail: "" });
+      setFormData({ rollNo: "", name: "", email: "", className: "", section: "A", parentName: "", parentEmail: "" });
+      setPassword("");
       setShowForm(false);
       setSelectedStudent(null);
       fetchStudents();
@@ -250,6 +257,16 @@ export default function ManageStudents() {
               required
               style={styles.input}
             />
+            {!selectedStudent && (
+              <input
+                type="password"
+                placeholder="Student Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={styles.input}
+              />
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <select
                 value={formData.className}

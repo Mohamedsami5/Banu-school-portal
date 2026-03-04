@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+const EXAM_TYPES = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
+
 const markSchema = new mongoose.Schema({
   rollNo: {
     type: String,
@@ -26,6 +28,13 @@ const markSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  // Exam type - required for all new marks
+  examType: {
+    type: String,
+    enum: EXAM_TYPES,
+    required: true,
+    trim: true
+  },
   marks: {
     type: Number,
     required: true
@@ -45,11 +54,11 @@ const markSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-
-// ✅ UNIQUE COMBINATION INDEX
+// Unique per student per exam — includes examType so same student can have marks for each exam
 markSchema.index(
-  { rollNo: 1, className: 1, section: 1, subject: 1 },
+  { rollNo: 1, className: 1, section: 1, subject: 1, examType: 1 },
   { unique: true }
 );
 
+export { EXAM_TYPES };
 export default mongoose.model("Mark", markSchema);

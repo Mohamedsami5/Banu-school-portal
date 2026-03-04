@@ -124,140 +124,278 @@ export default function AdminMarksApproval() {
       {error && <div style={styles.error}>{error}</div>}
       {success && <div style={styles.success}>{success}</div>}
 
-      {/* Controls */}
+      {/* Filter bar */}
       <div style={styles.controls}>
-        <input
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={styles.input}
-        />
+        <div style={styles.searchWrap}>
+          <span style={styles.searchIcon}>🔍</span>
+          <input
+            placeholder="Search by name, roll, subject or class…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={styles.searchInput}
+          />
+        </div>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={styles.input}
+          style={styles.select}
         >
-          <option value="">All</option>
+          <option value="">All Statuses</option>
           <option value="Pending">Pending</option>
           <option value="Approved">Approved</option>
           <option value="Rejected">Rejected</option>
         </select>
 
         <button onClick={fetchMarks} style={styles.refreshBtn}>
-          Refresh
+          ↻ Refresh
         </button>
       </div>
 
       {/* TABLE */}
       {loading ? (
-        <p>Loading...</p>
+        <p style={styles.loadingText}>Loading marks…</p>
+      ) : filteredMarks.length === 0 ? (
+        <p style={styles.emptyText}>No records match your filters.</p>
       ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Roll</th>
-              <th>Class</th>
-              <th>Section</th>
-              <th>Subject</th>
-              <th>Marks</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredMarks.map((m) => (
-              <tr key={m._id}>
-                <td>{m.studentName}</td>
-                <td>{m.rollNo}</td>
-                <td>{m.className}</td>
-                <td>{m.section}</td>
-                <td>{m.subject}</td>
-                <td>{m.marks}</td>
-                <td>
-                  <span
-                    style={{
-                      ...styles.badge,
-                      backgroundColor:
-                        m.status === "Approved"
-                          ? "#d4edda"
-                          : m.status === "Rejected"
-                          ? "#f8d7da"
-                          : "#fff3cd",
-                    }}
-                  >
-                    {m.status}
-                  </span>
-                </td>
-                <td>
-                  {m.status === "Pending" ? (
-                    <>
-                      <button
-                        style={styles.approve}
-                        disabled={updatingId === m._id}
-                        onClick={() =>
-                          updateStatus(m._id, "Approved")
-                        }
-                      >
-                        Approve
-                      </button>
-
-                      <button
-                        style={styles.reject}
-                        disabled={updatingId === m._id}
-                        onClick={() =>
-                          updateStatus(m._id, "Rejected")
-                        }
-                      >
-                        Reject
-                      </button>
-                    </>
-                  ) : (
-                    "-"
-                  )}
-                </td>
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Roll</th>
+                <th style={styles.th}>Class</th>
+                <th style={styles.th}>Section</th>
+                <th style={styles.th}>Subject</th>
+                <th style={styles.th}>Marks</th>
+                <th style={styles.th}>Status</th>
+                <th style={styles.th}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredMarks.map((m, idx) => (
+                <tr
+                  key={m._id}
+                  style={idx % 2 === 0 ? styles.trEven : styles.trOdd}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eef0fb")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      idx % 2 === 0 ? styles.trEven.background : styles.trOdd.background)
+                  }
+                >
+                  <td style={styles.td}>{m.studentName}</td>
+                  <td style={styles.td}>{m.rollNo}</td>
+                  <td style={styles.td}>{m.className}</td>
+                  <td style={styles.td}>{m.section}</td>
+                  <td style={styles.td}>{m.subject}</td>
+                  <td style={{ ...styles.td, fontWeight: 600 }}>{m.marks}</td>
+                  <td style={styles.td}>
+                    <span style={statusBadgeStyle(m.status)}>{m.status}</span>
+                  </td>
+                  <td style={styles.td}>
+                    {m.status === "Pending" ? (
+                      <div style={styles.actionGroup}>
+                        <button
+                          style={{
+                            ...styles.approve,
+                            opacity: updatingId === m._id ? 0.6 : 1,
+                          }}
+                          disabled={updatingId === m._id}
+                          onClick={() => updateStatus(m._id, "Approved")}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          style={{
+                            ...styles.reject,
+                            opacity: updatingId === m._id ? 0.6 : 1,
+                          }}
+                          disabled={updatingId === m._id}
+                          onClick={() => updateStatus(m._id, "Rejected")}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={styles.noAction}>—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
+function statusBadgeStyle(status) {
+  const base = {
+    display: "inline-block",
+    padding: "4px 12px",
+    borderRadius: 20,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: "0.3px",
+  };
+  if (status === "Approved")
+    return { ...base, background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" };
+  if (status === "Rejected")
+    return { ...base, background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" };
+  return { ...base, background: "#fef9c3", color: "#854d0e", border: "1px solid #fde68a" };
+}
+
 const styles = {
-  container: { padding: 30, background: "#f4f6fa", minHeight: "100vh" },
-  title: { fontSize: 24, fontWeight: 700, marginBottom: 20 },
-  controls: { display: "flex", gap: 10, marginBottom: 20 },
-  input: { padding: 8, borderRadius: 6, border: "1px solid #ccc" },
+  container: {
+    padding: 32,
+    background: "#f4f6fa",
+    minHeight: "100vh",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 700,
+    marginBottom: 24,
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+  },
+
+  // ── Filter bar ──
+  controls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 24,
+    flexWrap: "wrap",
+  },
+  searchWrap: {
+    position: "relative",
+    flex: "1 1 260px",
+  },
+  searchIcon: {
+    position: "absolute",
+    left: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 14,
+    pointerEvents: "none",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "9px 12px 9px 34px",
+    borderRadius: 8,
+    border: "1px solid #dde1ea",
+    fontSize: 14,
+    color: "#213547",
+    background: "#fff",
+    boxSizing: "border-box",
+    outline: "none",
+  },
+  select: {
+    padding: "9px 12px",
+    borderRadius: 8,
+    border: "1px solid #dde1ea",
+    fontSize: 14,
+    color: "#213547",
+    background: "#fff",
+    cursor: "pointer",
+    minWidth: 150,
+  },
   refreshBtn: {
-    padding: "8px 14px",
-    background: "#667eea",
+    padding: "9px 18px",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+    whiteSpace: "nowrap",
+  },
+
+  // ── Table ──
+  tableWrapper: {
+    borderRadius: 12,
+    overflow: "hidden",
+    boxShadow: "0 4px 20px rgba(102, 126, 234, 0.1)",
+    border: "1px solid #e8eaf0",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    background: "#fff",
+    fontSize: 14,
+  },
+  th: {
+    padding: "13px 16px",
+    textAlign: "left",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    fontWeight: 600,
+    fontSize: 13,
+    letterSpacing: "0.3px",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  trEven: { background: "#ffffff", transition: "background 0.15s ease" },
+  trOdd:  { background: "#f8f9ff", transition: "background 0.15s ease" },
+  td: {
+    padding: "12px 16px",
+    color: "#374151",
+    borderBottom: "1px solid #f0f1f5",
+  },
+
+  // ── Action buttons ──
+  actionGroup: {
+    display: "flex",
+    gap: 8,
+  },
+  approve: {
+    padding: "6px 14px",
+    background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
     color: "#fff",
     border: "none",
     borderRadius: 6,
     cursor: "pointer",
-  },
-  table: { width: "100%", borderCollapse: "collapse", background: "#fff" },
-  badge: { padding: "4px 10px", borderRadius: 12, fontSize: 12 },
-  approve: {
-    marginRight: 5,
-    padding: "6px 10px",
-    background: "#28a745",
-    color: "#fff",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 13,
   },
   reject: {
-    padding: "6px 10px",
-    background: "#dc3545",
+    padding: "6px 14px",
+    background: "linear-gradient(135deg, #f87171 0%, #dc2626 100%)",
     color: "#fff",
     border: "none",
-    borderRadius: 4,
+    borderRadius: 6,
     cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 13,
   },
-  error: { background: "#f8d7da", padding: 10, borderRadius: 6 },
-  success: { background: "#d4edda", padding: 10, borderRadius: 6 },
+  noAction: {
+    color: "#9ca3af",
+    fontSize: 16,
+  },
+
+  // ── Feedback ──
+  error: {
+    background: "#fee2e2",
+    color: "#b91c1c",
+    padding: "10px 16px",
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 14,
+    border: "1px solid #fecaca",
+  },
+  success: {
+    background: "#dcfce7",
+    color: "#15803d",
+    padding: "10px 16px",
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 14,
+    border: "1px solid #bbf7d0",
+  },
+  loadingText: { color: "#6b7280", fontSize: 15, marginTop: 20 },
+  emptyText:   { color: "#9ca3af", fontSize: 15, marginTop: 20 },
 };

@@ -51,10 +51,17 @@ export default function PublicLoginPage() {
         navigate("/admin/dashboard");
       } else if (data.role === "teacher") {
         navigate("/teacher/dashboard");
+      } else if (data.role === "student") {
+        navigate("/student/dashboard");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("An error occurred. Please try again.");
+      // TypeError: Failed to fetch → backend is not reachable
+      if (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) {
+        setError("Cannot reach the server. Please make sure the backend is running.");
+      } else {
+        setError("An error occurred. Please try again.");
+      }
       setLoading(false);
     }
   };
@@ -121,6 +128,16 @@ export default function PublicLoginPage() {
                     onChange={handleChange}
                   />
                   <span className="role-label">Teacher</span>
+                </label>
+                <label className="role-option">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="student"
+                    checked={formData.role === "student"}
+                    onChange={handleChange}
+                  />
+                  <span className="role-label">Student</span>
                 </label>
               </div>
             </div>

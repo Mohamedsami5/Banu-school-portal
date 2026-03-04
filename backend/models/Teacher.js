@@ -87,6 +87,11 @@ const teacherSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  areaOfSpecialization: {
+    type: String,
+    trim: true,
+    default: ""
+  },
   // Profile completion status
   profileCompleted: {
     type: Boolean,

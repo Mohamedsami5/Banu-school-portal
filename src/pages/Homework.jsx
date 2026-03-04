@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -17,6 +17,19 @@ export default function Homework() {
   });
   const [homeworkList, setHomeworkList] = useState([]);
   const [hwMessage, setHwMessage] = useState("");
+
+  // Modal state
+  const [selectedHomework, setSelectedHomework] = useState(null);
+  const [showHwModal, setShowHwModal] = useState(false);
+  const [modalMode, setModalMode] = useState("view"); // "view" | "edit" | "delete"
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({ title: "", description: "", dueDate: "" });
+  const [editMessage, setEditMessage] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const didLoadRef = useRef(false);
 
   // Class and section options
   const CLASS_OPTIONS = ["LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
@@ -63,6 +76,9 @@ export default function Homework() {
   };
 
   useEffect(() => {
+    if (!teacherId) return;
+    if (didLoadRef.current) return;
+    didLoadRef.current = true;
     fetchAssignments();
     fetchHomework();
   }, [teacherId]);
@@ -116,6 +132,89 @@ export default function Homework() {
     } catch (err) {
       console.error("Failed to assign homework", err);
       setHwMessage(err.message || "Failed to assign homework. Check server.");
+    }
+  };
+
+  const openHwModal = (hw) => {
+    setSelectedHomework(hw);
+    setModalMode("view");
+    setEditMessage("");
+    setShowHwModal(true);
+  };
+
+  const closeHwModal = () => {
+    setShowHwModal(false);
+    setSelectedHomework(null);
+    setModalMode("view");
+    setEditMessage("");
+  };
+
+  const enterEditMode = () => {
+    const dueDateValue = selectedHomework.dueDate
+      ? new Date(selectedHomework.dueDate).toISOString().split("T")[0]
+      : "";
+    setEditForm({
+      title: selectedHomework.title || "",
+      description: selectedHomework.description || "",
+      dueDate: dueDateValue,
+    });
+    setEditMessage("");
+    setModalMode("edit");
+  };
+
+  const handleEditHomework = async (e) => {
+    e.preventDefault();
+    if (!editForm.title || !editForm.description || !editForm.dueDate) {
+      setEditMessage("Please fill in all fields.");
+      return;
+    }
+    setEditLoading(true);
+    setEditMessage("");
+    try {
+      const id = selectedHomework._id || selectedHomework.id;
+      const res = await fetch(`${API_BASE}/homework/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editForm.title,
+          description: editForm.description,
+          dueDate: editForm.dueDate,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditMessage(data.message || "Failed to update homework.");
+        return;
+      }
+      await fetchHomework();
+      setSelectedHomework((prev) => ({ ...prev, ...editForm }));
+      setModalMode("view");
+      setEditMessage("");
+    } catch (err) {
+      setEditMessage(err.message || "Failed to update homework.");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeleteHomework = async () => {
+    setDeleteLoading(true);
+    try {
+      const id = selectedHomework._id || selectedHomework.id;
+      const res = await fetch(`${API_BASE}/homework/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditMessage(data.message || "Failed to delete homework.");
+        setModalMode("view");
+        return;
+      }
+      await fetchHomework();
+      closeHwModal();
+    } catch (err) {
+      setEditMessage(err.message || "Failed to delete homework.");
+      setModalMode("view");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -248,11 +347,16 @@ export default function Homework() {
                         <th style={styles.th}>Subject</th>
                         <th style={styles.th}>Due Date</th>
                         <th style={styles.th}>Posted</th>
+                        <th style={styles.th}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {homeworkList.map((hw) => (
-                        <tr key={hw._id || hw.id}>
+                        <tr
+                          key={hw._id || hw.id}
+                          style={styles.trHover}
+                          onClick={() => openHwModal(hw)}
+                        >
                           <td style={styles.td}>{hw.title}</td>
                           <td style={styles.td}>{hw.className}</td>
                           <td style={styles.td}>{hw.section}</td>
@@ -261,6 +365,14 @@ export default function Homework() {
                           <td style={styles.td}>
                             {new Date(hw.createdAt || hw.postedAt || Date.now()).toLocaleString()}
                           </td>
+                          <td style={styles.td} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              style={styles.viewButton}
+                              onClick={() => openHwModal(hw)}
+                            >
+                              View
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -268,37 +380,156 @@ export default function Homework() {
                 )}
       </section>
 
-      <section style={styles.card}>
-        <h3 style={styles.sectionTitle}>Assigned Homework</h3>
-        {homeworkList.length === 0 ? (
-          <p style={styles.placeholder}>No homework assigned yet.</p>
-        ) : (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Title</th>
-                <th style={styles.th}>Class</th>
-                <th style={styles.th}>Section</th>
-                <th style={styles.th}>Subject</th>
-                <th style={styles.th}>Due Date</th>
-                <th style={styles.th}>Posted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {homeworkList.map((hw) => (
-                <tr key={hw._id || hw.id}>
-                  <td style={styles.td}>{hw.title}</td>
-                  <td style={styles.td}>{hw.className}</td>
-                  <td style={styles.td}>{hw.section}</td>
-                  <td style={styles.td}>{hw.subject}</td>
-                  <td style={styles.td}>{hw.dueDate ? new Date(hw.dueDate).toLocaleDateString() : "-"}</td>
-                  <td style={styles.td}>{new Date(hw.createdAt || hw.postedAt || Date.now()).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {/* Homework Modal */}
+      {showHwModal && selectedHomework && (
+        <div style={styles.modalOverlay} onClick={closeHwModal}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+
+            {/* ── VIEW MODE ── */}
+            {modalMode === "view" && (
+              <>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Homework Details</h3>
+                  <button style={styles.closeButton} onClick={closeHwModal}>×</button>
+                </div>
+                <div style={styles.modalContent}>
+                  <div style={styles.detailRow}>
+                    <strong>Title</strong>
+                    <span>{selectedHomework.title}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <strong>Class</strong>
+                    <span>{selectedHomework.className}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <strong>Section</strong>
+                    <span>{selectedHomework.section}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <strong>Subject</strong>
+                    <span>{selectedHomework.subject}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <strong>Due Date</strong>
+                    <span>{selectedHomework.dueDate ? new Date(selectedHomework.dueDate).toLocaleDateString() : "-"}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <strong>Posted</strong>
+                    <span>{new Date(selectedHomework.createdAt || selectedHomework.postedAt || Date.now()).toLocaleString()}</span>
+                  </div>
+                  <div style={styles.descriptionBlock}>
+                    <strong style={styles.descriptionLabel}>Description</strong>
+                    <p style={styles.descriptionText}>{selectedHomework.description || "No description provided."}</p>
+                  </div>
+                  {editMessage && <p style={styles.errorText}>{editMessage}</p>}
+                </div>
+                <div style={styles.modalFooter}>
+                  <button style={styles.deleteButton} onClick={() => setModalMode("delete")}>Delete</button>
+                  <button style={styles.editButton} onClick={enterEditMode}>Edit</button>
+                  <button style={styles.closeModalButton} onClick={closeHwModal}>Close</button>
+                </div>
+              </>
+            )}
+
+            {/* ── EDIT MODE ── */}
+            {modalMode === "edit" && (
+              <>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Edit Homework</h3>
+                  <button style={styles.closeButton} onClick={closeHwModal}>×</button>
+                </div>
+                <form onSubmit={handleEditHomework}>
+                  <div style={styles.modalContent}>
+                    <div style={styles.editField}>
+                      <label style={styles.editLabel}>Title</label>
+                      <input
+                        style={styles.editInput}
+                        value={editForm.title}
+                        onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                        placeholder="Homework title"
+                        required
+                      />
+                    </div>
+                    <div style={styles.editField}>
+                      <label style={styles.editLabel}>Due Date</label>
+                      <input
+                        type="date"
+                        style={styles.editInput}
+                        value={editForm.dueDate}
+                        onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div style={styles.editField}>
+                      <label style={styles.editLabel}>Description</label>
+                      <textarea
+                        style={styles.editTextarea}
+                        rows={5}
+                        value={editForm.description}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        placeholder="Homework description"
+                        required
+                      />
+                    </div>
+                    {editMessage && <p style={styles.errorText}>{editMessage}</p>}
+                  </div>
+                  <div style={styles.modalFooter}>
+                    <button
+                      type="button"
+                      style={styles.closeModalButton}
+                      onClick={() => { setModalMode("view"); setEditMessage(""); }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      style={{ ...styles.editButton, opacity: editLoading ? 0.7 : 1 }}
+                      disabled={editLoading}
+                    >
+                      {editLoading ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* ── DELETE CONFIRM MODE ── */}
+            {modalMode === "delete" && (
+              <>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Confirm Delete</h3>
+                  <button style={styles.closeButton} onClick={closeHwModal}>×</button>
+                </div>
+                <div style={styles.modalContent}>
+                  <p style={styles.confirmText}>
+                    Are you sure you want to delete the homework{" "}
+                    <strong>"{selectedHomework.title}"</strong>?
+                    <br />
+                    This action cannot be undone.
+                  </p>
+                  {editMessage && <p style={styles.errorText}>{editMessage}</p>}
+                </div>
+                <div style={styles.modalFooter}>
+                  <button
+                    style={styles.closeModalButton}
+                    onClick={() => { setModalMode("view"); setEditMessage(""); }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    style={{ ...styles.deleteButton, opacity: deleteLoading ? 0.7 : 1 }}
+                    onClick={handleDeleteHomework}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? "Deleting…" : "Yes, Delete"}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +641,175 @@ const styles = {
     border: "none",
     cursor: "pointer",
     fontWeight: 700,
+  },
+  trHover: {
+    cursor: "pointer",
+    transition: "background 0.15s ease",
+  },
+  viewButton: {
+    padding: "6px 14px",
+    borderRadius: 6,
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 500,
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  modal: {
+    background: "white",
+    borderRadius: 12,
+    padding: 0,
+    maxWidth: 520,
+    width: "90%",
+    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "20px 24px",
+    borderBottom: "1px solid #e0e4e8",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 600,
+    color: "#213547",
+    margin: 0,
+  },
+  closeButton: {
+    background: "none",
+    border: "none",
+    fontSize: 28,
+    color: "#718096",
+    cursor: "pointer",
+    padding: 0,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+  },
+  modalContent: {
+    padding: "24px",
+  },
+  detailRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "10px 0",
+    borderBottom: "1px solid #f3f4f6",
+    fontSize: 14,
+    color: "#213547",
+  },
+  descriptionBlock: {
+    marginTop: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  descriptionLabel: {
+    fontSize: 14,
+    color: "#213547",
+  },
+  descriptionText: {
+    margin: 0,
+    fontSize: 14,
+    color: "#425266",
+    lineHeight: 1.7,
+    whiteSpace: "pre-wrap",
+    background: "#f8f9ff",
+    border: "1px solid #e0e4e8",
+    borderRadius: 8,
+    padding: "12px 14px",
+  },
+  modalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    padding: "16px 24px",
+    borderTop: "1px solid #e0e4e8",
+  },
+  editButton: {
+    padding: "10px 20px",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "white",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+  },
+  deleteButton: {
+    padding: "10px 20px",
+    background: "#ef5350",
+    color: "white",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+  },
+  closeModalButton: {
+    padding: "10px 20px",
+    background: "#f3f4f6",
+    color: "#374151",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+  },
+  editField: {
+    display: "flex",
+    flexDirection: "column",
+    marginBottom: 16,
+  },
+  editLabel: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#425266",
+    marginBottom: 6,
+  },
+  editInput: {
+    padding: "9px 12px",
+    borderRadius: 8,
+    border: "1px solid #e0e4e8",
+    fontSize: 14,
+    color: "#213547",
+    fontFamily: "inherit",
+  },
+  editTextarea: {
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #e0e4e8",
+    fontSize: 14,
+    color: "#213547",
+    fontFamily: "inherit",
+    lineHeight: 1.6,
+    resize: "vertical",
+  },
+  confirmText: {
+    fontSize: 15,
+    color: "#374151",
+    lineHeight: 1.7,
+    margin: 0,
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#ef5350",
   },
   loading: {
     display: "flex",

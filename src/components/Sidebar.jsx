@@ -6,7 +6,8 @@ const defaultItems = [
   { id: "students", label: "Manage Students", color: "#4facfe" },
   { id: "parents", label: "Manage Parents", color: "#43e97b" },
   { id: "announcements", label: "Announcements", color: "#fa709a" },
-  { id: "marks", label: "Marks Approval", color: "#ff9800" }, // ✅ Added
+  { id: "events", label: "Events & Achievements", color: "#a855f7" },
+  { id: "marks", label: "Marks Approval", color: "#ff9800" },
   { id: "logout", label: "Logout", color: "#ef5350" },
 ];
 

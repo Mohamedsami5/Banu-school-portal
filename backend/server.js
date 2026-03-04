@@ -1,6 +1,8 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import Admin from "./models/Admin.js";
 import Teacher from "./models/Teacher.js";
@@ -11,6 +13,9 @@ import Homework from "./models/Homework.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
+import eventsRoutes from "./routes/eventsRoutes.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // Allow CORS for development (adjust for production)
@@ -33,6 +38,10 @@ app.use(express.json({ limit: "5mb" }));
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/events", eventsRoutes);
+
+// Serve uploaded event/achievement images
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Server port configuration
 const PORT = process.env.PORT || 5000;
@@ -79,6 +88,44 @@ async function migrateTeacherJoiningDateField() {
   }
 }
 
+// ─── Marks index migration ────────────────────────────────────────────────────
+// The old unique index { rollNo, className, section, subject } (no examType)
+// causes duplicate-key (11000) errors when saving marks for a second exam type.
+// This function drops that stale index and removes any legacy marks that were
+// saved without examType so the new index can be created cleanly.
+async function migrateMarksIndex() {
+  try {
+    const col = Mark.collection;
+
+    // 1. List existing indexes
+    const indexes = await col.indexes();
+    const oldIndexName = "rollNo_1_className_1_section_1_subject_1";
+    const hasOldIndex  = indexes.some((idx) => idx.name === oldIndexName);
+
+    if (hasOldIndex) {
+      await col.dropIndex(oldIndexName);
+      console.log(`[marks migration] Dropped stale index: ${oldIndexName}`);
+    } else {
+      console.log("[marks migration] Old index not found — skipping drop.");
+    }
+
+    // 2. Remove legacy marks that have no examType (they are invalid under the
+    //    new schema and would block the new unique index from being created).
+    const deleted = await col.deleteMany({ examType: { $exists: false } });
+    if (deleted.deletedCount > 0) {
+      console.log(`[marks migration] Removed ${deleted.deletedCount} legacy mark(s) without examType.`);
+    }
+
+    // 3. Let Mongoose sync the new index defined in the schema.
+    //    createIndexes() is the Mongoose 7+ equivalent of the removed ensureIndexes().
+    await Mark.createIndexes();
+    console.log("[marks migration] New compound index (rollNo+className+section+subject+examType) ensured.");
+  } catch (err) {
+    // Log but don't crash — the server can still start; the admin can fix manually.
+    console.error("[marks migration] Failed:", err.message);
+  }
+}
+
 // Connect to MongoDB before starting server
 mongoose.connect(MONGODB_URI, mongooseOptions)
   .then(async () => {
@@ -87,7 +134,8 @@ mongoose.connect(MONGODB_URI, mongooseOptions)
     console.log(`Connection state: ${mongoose.connection.readyState} (1 = connected)`);
 
     await migrateTeacherJoiningDateField();
-    
+    await migrateMarksIndex();
+
     // Start server only after MongoDB connection is established
     // Start with a function that handles EADDRINUSE by retrying the next port
     const startServer = (port) => {
@@ -142,15 +190,20 @@ app.get("/health", (req, res) => {
 // Auth login – single endpoint for admin and teacher
 app.post("/api/auth/login", async (req, res) => {
   try {
+    // Fail fast with a clear message if the DB is not ready
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: "Server is starting up. Please try again in a moment." });
+    }
+
     const { email, password, role } = req.body;
-    const normalizedEmail = (email && String(email).trim().toLowerCase()) || "";
-    const normalizedPassword = (password && String(password).trim()) || "";
+    const normalizedEmail    = (email    && String(email).trim().toLowerCase()) || "";
+    const normalizedPassword = (password && String(password).trim())            || "";
 
     if (!normalizedEmail || !normalizedPassword) {
       return res.status(400).json({ message: "Email and password are required" });
     }
-    if (!role || (role !== "admin" && role !== "teacher")) {
-      return res.status(400).json({ message: "Role must be admin or teacher" });
+    if (!role || (role !== "admin" && role !== "teacher" && role !== "student")) {
+      return res.status(400).json({ message: "Role must be admin, teacher or student" });
     }
 
     if (role === "admin") {
@@ -182,6 +235,29 @@ app.post("/api/auth/login", async (req, res) => {
       const user = teacher.toObject ? teacher.toObject() : { ...teacher };
       delete user.password;
       const out = { ...user, role: "teacher" };
+      return res.json(out);
+    }
+
+    if (role === "student") {
+      const student = await Student.findOne({ email: normalizedEmail });
+      if (!student) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      const storedPassword = student.password || "";
+      const passwordMatch = storedPassword.startsWith("$2")
+        ? bcrypt.compareSync(normalizedPassword, storedPassword)
+        : storedPassword === normalizedPassword;
+      if (!passwordMatch) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      const user = student.toObject ? student.toObject() : { ...student };
+      delete user.password;
+      const out = {
+        ...user,
+        role: "student",
+        userId: user._id,
+        email: user.email,
+      };
       return res.json(out);
     }
   } catch (err) {
@@ -522,22 +598,29 @@ app.post("/api/students", async (req, res) => {
   try {
     checkMongoConnection();
     console.log("POST /api/students body:", JSON.stringify(req.body));
-    const { name, email, className, section, rollNo, parentName, parentEmail } = req.body;
+    const { name, email, className, section, rollNo, parentName, parentEmail, password } = req.body;
 
     if (!name || !email || !className || !rollNo || !section) {
       return res.status(400).json({ message: "Name, email, className, section and rollNo are required" });
     }
+    if (!password || !String(password).trim()) {
+      return res.status(400).json({ message: "Password is required" });
+    }
 
-    console.log("Submitted rollNo:", rollNo, "for class:", className, "section:", section);
+    const rollNoStr = String(rollNo).trim();
+    const passwordStr = String(password).trim();
+
+    console.log("Submitted rollNo:", rollNoStr, "for class:", className, "section:", section);
 
     const student = new Student({
       name: String(name).trim(),
       email: String(email).trim().toLowerCase(),
       className: String(className).trim(),
       section: String(section).trim(),
-      rollNo: String(rollNo).trim(),
+      rollNo: rollNoStr,
       parentName: parentName || "",
-      parentEmail: parentEmail || ""
+      parentEmail: parentEmail || "",
+      password: passwordStr,
     });
 
     const savedStudent = await student.save();
@@ -768,7 +851,7 @@ app.put("/api/teacher/profile/:id", async (req, res) => {
   try {
     checkMongoConnection();
     const { id } = req.params;
-    const { phone, qualification, experience, address, bio, photo, fatherName, motherName, dateOfBirth, languagesKnown } = req.body || {};
+    const { phone, qualification, experience, address, bio, photo, fatherName, motherName, dateOfBirth, languagesKnown, areaOfSpecialization } = req.body || {};
 
     const teacher = await Teacher.findById(id);
     if (!teacher) {
@@ -791,6 +874,7 @@ app.put("/api/teacher/profile/:id", async (req, res) => {
     if (address !== undefined) teacher.address = normalize(address);
     if (bio !== undefined) teacher.bio = normalize(bio);
     if (photo !== undefined) teacher.photo = String(photo || "").trim();
+    if (areaOfSpecialization !== undefined) teacher.areaOfSpecialization = normalize(areaOfSpecialization);
     
     // New additional information fields
     if (fatherName !== undefined) teacher.fatherName = normalize(fatherName);
@@ -862,10 +946,10 @@ app.get("/api/teachers/:id/profile", async (req, res) => {
 });
 
 // POST /api/teacher/profile - Save or update teacher profile (creates/updates profile and sets profileCompleted = true)
-app.post("/api/teacher/profile", async (req, res) => {
-  try {
-    checkMongoConnection();
-    const { teacherId, fatherName, motherName, dateOfBirth, phoneNumber, languagesKnown, qualification, experience, address, profilePhoto } = req.body;
+  app.post("/api/teacher/profile", async (req, res) => {
+    try {
+      checkMongoConnection();
+      const { teacherId, fatherName, motherName, dateOfBirth, phoneNumber, languagesKnown, qualification, experience, address, profilePhoto, areaOfSpecialization } = req.body;
 
     if (!teacherId) {
       return res.status(400).json({ message: "Teacher ID is required" });
@@ -898,7 +982,10 @@ app.post("/api/teacher/profile", async (req, res) => {
       }
       teacher.experience = exp;
     }
-    if (address !== undefined) teacher.address = normalize(address);
+      if (address !== undefined) teacher.address = normalize(address);
+      if (areaOfSpecialization !== undefined) {
+        teacher.areaOfSpecialization = normalize(areaOfSpecialization);
+      }
     
     // Handle date of birth
     if (dateOfBirth !== undefined) {
@@ -917,15 +1004,15 @@ app.post("/api/teacher/profile", async (req, res) => {
     }
     
     // Handle languages known
-    if (languagesKnown !== undefined) {
-      if (Array.isArray(languagesKnown)) {
-        teacher.languagesKnown = languagesKnown.filter(l => l && String(l).trim()).map(l => String(l).trim());
-      } else if (typeof languagesKnown === "string") {
-        teacher.languagesKnown = languagesKnown.split(",").map(l => l.trim()).filter(l => l);
-      } else {
-        teacher.languagesKnown = [];
+      if (languagesKnown !== undefined) {
+        if (Array.isArray(languagesKnown)) {
+          teacher.languagesKnown = languagesKnown.filter(l => l && String(l).trim()).map(l => String(l).trim());
+        } else if (typeof languagesKnown === "string") {
+          teacher.languagesKnown = languagesKnown.split(",").map(l => l.trim()).filter(l => l);
+        } else {
+          teacher.languagesKnown = [];
+        }
       }
-    }
     
     // Handle profile photo URL
     if (profilePhoto !== undefined) {
@@ -1002,6 +1089,7 @@ app.get("/api/teacher/profile/:teacherId", async (req, res) => {
       phoneNumber: teacher.phone || "",
       languagesKnown: Array.isArray(teacher.languagesKnown) ? teacher.languagesKnown : [],
       qualification: teacher.qualification || "",
+      areaOfSpecialization: teacher.areaOfSpecialization || "",
       experience: teacher.experience || "",
       address: teacher.address || "",
       profilePhoto: teacher.profilePhoto || teacher.photo || "",
@@ -1119,13 +1207,299 @@ app.get("/api/teacher/assignments", async (req, res) => {
 });
 
 // Mark routes - teacher uploads
-// GET /api/marks - Fetch submitted marks (optional query: teacherId)
+// GET /api/marks/analytics/student-progress
+// Returns exam-wise approved marks for a single student in a given class/section/subject.
+// Query params: rollNo, className, section, subject
+// Response: { student, subject, className, section, exams: [{ examType, marks, result }] }
+app.get("/api/marks/analytics/student-progress", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { rollNo, className, section, subject } = req.query;
+
+    if (!rollNo || !className || !section || !subject) {
+      return res.status(400).json({
+        message: "rollNo, className, section, and subject are required"
+      });
+    }
+
+    const EXAM_ORDER = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
+    const PASS_MARK  = 35;
+
+    // Only approved marks count for the progress chart
+    const records = await Mark.find({
+      rollNo:    String(rollNo).trim(),
+      className: String(className).trim(),
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      status:    "Approved",
+    }).select("examType marks studentName").lean();
+
+    // Build an ordered array — only include exams that have approved data
+    const examMap = {};
+    records.forEach((r) => { examMap[r.examType] = r; });
+
+    const exams = EXAM_ORDER
+      .filter((et) => examMap[et] !== undefined)
+      .map((et) => ({
+        examType: et,
+        marks:    examMap[et].marks,
+        result:   examMap[et].marks >= PASS_MARK ? "Pass" : "Fail",
+      }));
+
+    const studentName = records.length > 0 ? records[0].studentName : "";
+
+    return res.json({
+      rollNo,
+      studentName,
+      className,
+      section,
+      subject,
+      exams,
+    });
+  } catch (error) {
+    console.error("Error fetching student progress:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching student progress", error: error.message });
+  }
+});
+
+// GET /api/marks/analytics/class-progress
+// Returns per-exam average marks for every student in a class/section/subject.
+// Query params: className, section, subject
+// Response: { subject, className, section, exams: [{ examType, students: [{ rollNo, studentName, marks, result }], classAvg }] }
+app.get("/api/marks/analytics/class-progress", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { className, section, subject } = req.query;
+
+    if (!className || !section || !subject) {
+      return res.status(400).json({ message: "className, section, and subject are required" });
+    }
+
+    const EXAM_ORDER = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
+    const PASS_MARK  = 35;
+
+    const records = await Mark.find({
+      className: String(className).trim(),
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      status:    "Approved",
+    }).select("examType marks rollNo studentName").lean();
+
+    // Group by examType
+    const byExam = {};
+    records.forEach((r) => {
+      if (!byExam[r.examType]) byExam[r.examType] = [];
+      byExam[r.examType].push({
+        rollNo:      r.rollNo,
+        studentName: r.studentName,
+        marks:       r.marks,
+        result:      r.marks >= PASS_MARK ? "Pass" : "Fail",
+      });
+    });
+
+    const exams = EXAM_ORDER
+      .filter((et) => byExam[et] && byExam[et].length > 0)
+      .map((et) => {
+        const students = byExam[et];
+        const avg = students.reduce((sum, s) => sum + s.marks, 0) / students.length;
+        return {
+          examType:  et,
+          students,
+          classAvg:  Math.round(avg * 10) / 10,
+        };
+      });
+
+    return res.json({ className, section, subject, exams });
+  } catch (error) {
+    console.error("Error fetching class progress:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching class progress", error: error.message });
+  }
+});
+
+// GET /api/marks/analytics/pass-fail
+// Returns pass / fail counts for a class/section/subject/examType (approved marks only).
+// Query params: className, section, subject, examType
+app.get("/api/marks/analytics/pass-fail", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { className, section, subject, examType } = req.query;
+
+    if (!className || !section || !subject || !examType) {
+      return res.status(400).json({ message: "className, section, subject, and examType are required" });
+    }
+
+    const PASS_MARK = 35;
+
+    const records = await Mark.find({
+      className: String(className).trim(),
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      examType:  String(examType).trim(),
+      status:    "Approved",
+    }).select("marks rollNo studentName").lean();
+
+    let passCount = 0;
+    let failCount = 0;
+    records.forEach((r) => {
+      r.marks >= PASS_MARK ? passCount++ : failCount++;
+    });
+
+    return res.json({
+      className, section, subject, examType,
+      total:     records.length,
+      passCount,
+      failCount,
+      passPercent: records.length > 0 ? Math.round((passCount / records.length) * 100) : 0,
+      failPercent: records.length > 0 ? Math.round((failCount / records.length) * 100) : 0,
+    });
+  } catch (error) {
+    console.error("Error fetching pass/fail stats:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching pass/fail stats", error: error.message });
+  }
+});
+
+// GET /api/marks/analytics/class-average
+// Returns exam-wise class averages for a class/section/subject (approved marks only).
+// Query params: className, section, subject
+app.get("/api/marks/analytics/class-average", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { className, section, subject } = req.query;
+
+    if (!className || !section || !subject) {
+      return res.status(400).json({ message: "className, section, and subject are required" });
+    }
+
+    const EXAM_ORDER = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
+    const PASS_MARK  = 35;
+
+    const records = await Mark.find({
+      className: String(className).trim(),
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      status:    "Approved",
+    }).select("examType marks").lean();
+
+    // Group marks by exam type
+    const byExam = {};
+    records.forEach((r) => {
+      if (!byExam[r.examType]) byExam[r.examType] = [];
+      byExam[r.examType].push(r.marks);
+    });
+
+    const averages = EXAM_ORDER
+      .filter((et) => byExam[et] && byExam[et].length > 0)
+      .map((et) => {
+        const marksList = byExam[et];
+        const avg       = marksList.reduce((s, m) => s + m, 0) / marksList.length;
+        return {
+          examType: et,
+          average:  Math.round(avg * 10) / 10,
+          count:    marksList.length,
+          result:   avg >= PASS_MARK ? "Pass" : "Fail",
+        };
+      });
+
+    return res.json({ className, section, subject, averages });
+  } catch (error) {
+    console.error("Error fetching class averages:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching class averages", error: error.message });
+  }
+});
+
+// GET /api/marks/analytics/mark-range-count
+// Count students with approved marks in a given range.
+// Accepts either:
+//   minMarks + maxMarks  (e.g. minMarks=0&maxMarks=10)
+//   slab                 (legacy: slab=50 → 41–50)
+// Optional filters: className, section, subject, examType
+app.get("/api/marks/analytics/mark-range-count", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { slab, minMarks, maxMarks, className, section, subject, examType } = req.query;
+
+    let min, max;
+
+    if (minMarks !== undefined && maxMarks !== undefined) {
+      min = parseInt(minMarks, 10);
+      max = parseInt(maxMarks, 10);
+      if (isNaN(min) || isNaN(max) || min < 0 || max > 100 || min > max) {
+        return res.status(400).json({ message: "minMarks and maxMarks must be valid integers between 0 and 100" });
+      }
+    } else if (slab !== undefined) {
+      const slabNum = parseInt(slab, 10);
+      if (isNaN(slabNum) || slabNum < 10 || slabNum > 100 || slabNum % 10 !== 0) {
+        return res.status(400).json({ message: "slab must be one of 10,20,30,40,50,60,70,80,90,100" });
+      }
+      max = slabNum;
+      min = slabNum - 9;
+    } else {
+      return res.status(400).json({ message: "Provide minMarks+maxMarks or slab" });
+    }
+
+    const filter = {
+      status: "Approved",
+      marks:  { $gte: min, $lte: max },
+    };
+    if (className) filter.className = String(className).trim();
+    if (section)   filter.section   = String(section).trim();
+    if (subject)   filter.subject   = String(subject).trim();
+    if (examType)  filter.examType  = String(examType).trim();
+
+    const count = await Mark.countDocuments(filter);
+
+    return res.json({
+      range:   `${min}–${max}`,
+      min,
+      max,
+      count,
+      filters: {
+        className: className || null,
+        section:   section   || null,
+        subject:   subject   || null,
+        examType:  examType  || null,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching mark-range count:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching mark-range count", error: error.message });
+  }
+});
+
+// GET /api/marks - Fetch submitted marks
+// Query params: teacherId (required), examType (optional), className, section, subject
 app.get("/api/marks", async (req, res) => {
   try {
     checkMongoConnection();
-    const teacherId = req.query.teacherId;
-    console.log("GET /api/marks teacherId:", teacherId);
-    const filter = teacherId ? { teacherId } : {};
+    const { teacherId, examType, className, section, subject } = req.query;
+
+    const filter = {};
+    if (teacherId)  filter.teacherId  = teacherId;
+    if (examType)   filter.examType   = String(examType).trim();
+    if (className)  filter.className  = String(className).trim();
+    if (section)    filter.section    = String(section).trim();
+    if (subject)    filter.subject    = String(subject).trim();
+
     const marks = await Mark.find(filter).sort({ createdAt: -1 });
     res.json(Array.isArray(marks) ? marks : []);
   } catch (error) {
@@ -1180,39 +1554,60 @@ app.put("/api/marks/:id/status", async (req, res) => {
 
 
 
-// POST /api/marks - Save single mark (legacy)
+// POST /api/marks - Save single mark (legacy, kept for backward compatibility)
+// examType is required; callers that don't send it will get a 400 error.
 app.post("/api/marks", async (req, res) => {
   try {
     checkMongoConnection();
-    // Log incoming body and request info for debugging
-    console.log("POST /api/marks from", req.ip, "body:", JSON.stringify(req.body));
 
-    const { rollNo, studentName, class: className, section, subject, marks, teacherEmail, teacherId } = req.body;
-    if (!rollNo || !studentName || !className || !section || !subject || marks === undefined || marks === null || marks === "") {
-      console.error("Validation failed for /api/marks", { body: req.body });
-      return res.status(400).json({ message: "rollNo, studentName, className, section, subject, and marks are required" });
+    const {
+      rollNo, studentName,
+      class: className, section, subject,
+      examType,
+      marks, teacherEmail, teacherId
+    } = req.body;
+
+    if (!rollNo || !studentName || !className || !section || !subject || !examType ||
+        marks === undefined || marks === null || marks === "") {
+      return res.status(400).json({
+        message: "rollNo, studentName, className, section, subject, examType, and marks are required"
+      });
     }
+
+    if (!EXAM_TYPES.includes(examType)) {
+      return res.status(400).json({ message: `examType must be one of: ${EXAM_TYPES.join(", ")}` });
+    }
+
     const num = Number(marks);
     if (isNaN(num) || num < 0 || num > 100) {
-      console.error("Invalid marks value", { marks });
       return res.status(400).json({ message: "Marks must be between 0 and 100" });
     }
-    const mark = new Mark({
-      rollNo: String(rollNo).trim(),
-      studentName: String(studentName).trim(),
+
+    // Use upsert so re-submitting the same exam updates instead of duplicating
+    const filter = {
+      rollNo:    String(rollNo).trim(),
       className: String(className).trim(),
-      section: String(section).trim(),
-      subject: String(subject).trim(),
-      marks: num,
-      teacherEmail: (teacherEmail && String(teacherEmail).trim()) || "Teacher",
-      teacherId: teacherId || undefined,
-      status: "Pending"
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      examType:  String(examType).trim(),
+    };
+    const update = {
+      $set: {
+        ...filter,
+        studentName:  String(studentName).trim(),
+        marks:        num,
+        teacherEmail: (teacherEmail && String(teacherEmail).trim()) || "Teacher",
+        teacherId:    teacherId || undefined,
+        status:       "Pending",
+      }
+    };
+    const saved = await Mark.findOneAndUpdate(filter, update, {
+      upsert: true, new: true, setDefaultsOnInsert: true
     });
-    const saved = await mark.save();
-    console.log("Saved mark id:", saved._id);
+
     res.status(201).json({ message: "Marks saved", saved });
   } catch (error) {
-    console.error("Error saving marks:", error.stack || error, "body:", JSON.stringify(req.body));
+    console.error("Error saving marks:", error.stack || error);
     if (error.message.includes("MongoDB not connected")) {
       res.status(503).json({ message: "Database connection unavailable", error: error.message });
     } else {
@@ -1221,33 +1616,45 @@ app.post("/api/marks", async (req, res) => {
   }
 });
 
+// Allowed exam types (mirrors the schema enum)
+const EXAM_TYPES = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
+
 async function submitBulkMarks(req, res) {
   try {
     checkMongoConnection();
 
-    const { teacherId, className, section, subject, entries } = req.body;
+    const { teacherId, className, section, subject, examType, entries } = req.body;
 
-    if (!teacherId || !className || !section || !subject || !Array.isArray(entries)) {
+    // examType is now required
+    if (!teacherId || !className || !section || !subject || !examType || !Array.isArray(entries)) {
       return res.status(400).json({
-        message: "teacherId, className, section, subject and entries are required"
+        message: "teacherId, className, section, subject, examType and entries are required"
+      });
+    }
+
+    if (!EXAM_TYPES.includes(examType)) {
+      return res.status(400).json({
+        message: `examType must be one of: ${EXAM_TYPES.join(", ")}`
       });
     }
 
     const classNameTrimmed = String(className).trim();
-    const sectionTrimmed = String(section).trim();
-    const subjectTrimmed = String(subject).trim();
+    const sectionTrimmed   = String(section).trim();
+    const subjectTrimmed   = String(subject).trim();
+    const examTypeTrimmed  = String(examType).trim();
 
     const teacher = await Teacher.findById(teacherId).select("teaching email");
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
+    // Verify teacher is assigned to this class/section/subject
     const teaching = Array.isArray(teacher.teaching) ? teacher.teaching : [];
     const allowed = teaching.some(
       (t) =>
         String(t.className).trim() === classNameTrimmed &&
-        String(t.section).trim() === sectionTrimmed &&
-        String(t.subject).trim() === subjectTrimmed
+        String(t.section).trim()   === sectionTrimmed &&
+        String(t.subject).trim()   === subjectTrimmed
     );
 
     if (!allowed) {
@@ -1256,102 +1663,81 @@ async function submitBulkMarks(req, res) {
       });
     }
 
-    // Process entries and use findOneAndUpdate with upsert to prevent duplicates
-    // This allows editing existing marks instead of skipping them
     const processed = [];
-    const updated = [];
-    const created = [];
-    const errors = [];
+    const updated   = [];
+    const created   = [];
+    const errors    = [];
 
     for (const entry of entries) {
       if (!entry || !entry.rollNo || entry.marks === undefined || entry.marks === "") {
         continue;
       }
 
-      const rollNoTrimmed = String(entry.rollNo).trim();
+      const rollNoTrimmed      = String(entry.rollNo).trim();
       const studentNameTrimmed = String(entry.studentName || "").trim();
-      const marksNum = Number(entry.marks);
+      const marksNum           = Number(entry.marks);
 
-      // Validate marks
       if (Number.isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-        errors.push({
-          rollNo: rollNoTrimmed,
-          studentName: studentNameTrimmed,
-          error: `Marks must be between 0 and 100`
-        });
+        errors.push({ rollNo: rollNoTrimmed, studentName: studentNameTrimmed, error: "Marks must be between 0 and 100" });
         continue;
       }
 
-      // Use findOneAndUpdate with upsert to prevent duplicates
-      // If marks exist, update them; if not, create new
-      // Status resets to "Pending" when marks are edited
       try {
+        // Unique key now includes examType — same student can have marks for each exam
         const filter = {
-          rollNo: rollNoTrimmed,
+          rollNo:    rollNoTrimmed,
           className: classNameTrimmed,
-          section: sectionTrimmed,
-          subject: subjectTrimmed
+          section:   sectionTrimmed,
+          subject:   subjectTrimmed,
+          examType:  examTypeTrimmed
         };
 
         const update = {
           $set: {
-            rollNo: rollNoTrimmed,
+            rollNo:      rollNoTrimmed,
             studentName: studentNameTrimmed,
-            className: classNameTrimmed,
-            section: sectionTrimmed,
-            subject: subjectTrimmed,
-            marks: marksNum,
+            className:   classNameTrimmed,
+            section:     sectionTrimmed,
+            subject:     subjectTrimmed,
+            examType:    examTypeTrimmed,
+            marks:       marksNum,
             teacherEmail: teacher.email,
-            teacherId: teacher._id,
-            status: "Pending" // Reset to Pending when marks are edited
+            teacherId:   teacher._id,
+            status:      "Pending"   // always reset to Pending on edit
           }
         };
 
-        const options = {
-          upsert: true, // Create if doesn't exist
-          new: true, // Return updated document
-          setDefaultsOnInsert: true
-        };
+        const options = { upsert: true, new: true, setDefaultsOnInsert: true };
 
         const result = await Mark.findOneAndUpdate(filter, update, options);
-        
+
         if (result) {
-          // Check if this was an update (existing document) or insert (new document)
-          const wasNew = !result.createdAt || 
-            (result.updatedAt && result.createdAt && 
-             result.updatedAt.getTime() - result.createdAt.getTime() < 1000);
-          
-          if (wasNew) {
-            created.push(result);
-          } else {
-            updated.push(result);
-          }
+          // Distinguish insert vs update by comparing timestamps
+          const isNew =
+            result.createdAt &&
+            result.updatedAt &&
+            Math.abs(result.updatedAt.getTime() - result.createdAt.getTime()) < 1000;
+
+          isNew ? created.push(result) : updated.push(result);
           processed.push(result);
         }
-      } catch (error) {
-        console.error(`Error processing marks for ${rollNoTrimmed}:`, error);
-        errors.push({
-          rollNo: rollNoTrimmed,
-          studentName: studentNameTrimmed,
-          error: error.message || "Failed to save marks"
-        });
+      } catch (err) {
+        console.error(`Error processing marks for ${rollNoTrimmed}:`, err);
+        errors.push({ rollNo: rollNoTrimmed, studentName: studentNameTrimmed, error: err.message || "Failed to save marks" });
       }
     }
 
     return res.status(200).json({
-      message: "Bulk marks processed",
-      savedCount: processed.length,
+      message:      "Bulk marks processed",
+      savedCount:   processed.length,
       createdCount: created.length,
       updatedCount: updated.length,
-      saved: processed,
-      errors: errors.length > 0 ? errors : undefined
+      saved:        processed,
+      errors:       errors.length > 0 ? errors : undefined
     });
   } catch (error) {
     console.error("Error saving marks:", error);
-    return res.status(500).json({
-      message: "Error saving marks",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error saving marks", error: error.message });
   }
 }
 app.post("/api/teacher/marks", submitBulkMarks);
@@ -1362,11 +1748,18 @@ app.get("/api/homework", async (req, res) => {
   try {
     checkMongoConnection();
     const { teacherId, className, section } = req.query;
-    console.log("GET /api/homework query:", { teacherId, className, section });
+    
+    // Build filter object with only defined values
     const filter = {};
     if (teacherId) filter.teacherId = teacherId;
     if (className) filter.className = String(className).trim();
     if (section) filter.section = String(section).trim();
+    
+    // Log only the filter that will be used (no undefined values)
+    if (Object.keys(filter).length > 0) {
+      console.log("GET /api/homework filter:", filter);
+    }
+    
     const hw = await Homework.find(filter).sort({ createdAt: -1 });
     res.json(Array.isArray(hw) ? hw : []);
   } catch (error) {

@@ -7,6 +7,7 @@ import ManageTeachers from "./ManageTeachers";
 import ManageStudents from "./ManageStudents";
 import ManageParents from "./ManageParents";
 import Announcements from "./Announcements";
+import EventsAchievements from "./EventsAchievements";
 import AdminMarksApproval from "./AdminMarksApproval"; 
 
 export default function AdminDashboard() {
@@ -55,6 +56,8 @@ export default function AdminDashboard() {
         return <ManageParents />;
       case "announcements":
         return <Announcements />;
+      case "events":
+        return <EventsAchievements />;
       case "marks":                        
         return <AdminMarksApproval />;
       default:

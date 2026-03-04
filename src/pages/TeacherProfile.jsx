@@ -10,7 +10,6 @@ const emptyForm = {
   // Teacher-editable fields
   phone: "",
   qualification: "",
-  experience: "",
   address: "",
   bio: "",
   photo: "",
@@ -18,6 +17,7 @@ const emptyForm = {
   motherName: "",
   dateOfBirth: "",
   languagesKnown: "",
+  areaOfSpecialization: "",
 };
 
 export default function TeacherProfile() {
@@ -94,7 +94,6 @@ export default function TeacherProfile() {
       setForm({
         phone: data?.phoneNumber || data?.phone || "",
         qualification: data?.qualification || "",
-        experience: data?.experience || "",
         address: data?.address || "",
         bio: data?.bio || "",
         photo: data?.profilePhoto || data?.photo || "",
@@ -102,6 +101,7 @@ export default function TeacherProfile() {
         motherName: data?.motherName || "",
         dateOfBirth: formatDateForInput(data?.dateOfBirth),
         languagesKnown: formatLanguages(data?.languagesKnown),
+        areaOfSpecialization: data?.areaOfSpecialization || "",
       });
     } catch (err) {
       console.error("Failed to load teacher profile:", err);
@@ -353,13 +353,12 @@ export default function TeacherProfile() {
       addLine("Father Name", form.fatherName || teacher.fatherName || "Not provided");
       addLine("Mother Name", form.motherName || teacher.motherName || "Not provided");
       
-      // Date of Birth and Age
+      // Date of Birth
       const dobText = form.dateOfBirth || teacher.dateOfBirth 
         ? formatDate(form.dateOfBirth || teacher.dateOfBirth)
         : "Not provided";
       const ageText = age !== null ? `${age} years` : "N/A";
       addLine("Date of Birth", dobText);
-      addLine("Age", ageText);
       
       addLine("Phone Number", form.phone || teacher.phone || "Not provided");
       
@@ -370,7 +369,7 @@ export default function TeacherProfile() {
       addLine("Languages Known", languagesText);
       
       addLine("Qualification", form.qualification || teacher.qualification || "Not provided");
-      addLine("Experience", form.experience || teacher.experience || "Not provided");
+      addLine("Area of Specialization", form.areaOfSpecialization || teacher.areaOfSpecialization || "Not provided");
       addLine("Address", form.address || teacher.address || "Not provided");
 
       // Bio (if available)
@@ -469,13 +468,9 @@ export default function TeacherProfile() {
       }
     }
 
-    // Validate experience (should be a number or contain "years")
-    if (form.experience && form.experience.trim()) {
-      const exp = form.experience.trim();
-      if (isNaN(parseFloat(exp)) && !exp.toLowerCase().includes("year")) {
-        setError("Experience should be a number or contain 'years'");
-        return;
-      }
+    if (!form.areaOfSpecialization || !form.areaOfSpecialization.trim()) {
+      setError("Area of specialization is required");
+      return;
     }
 
     try {
@@ -489,12 +484,12 @@ export default function TeacherProfile() {
         teacherId: teacherId,
         phoneNumber: form.phone,
         qualification: form.qualification,
-        experience: form.experience,
         address: form.address,
         fatherName: form.fatherName,
         motherName: form.motherName,
         dateOfBirth: form.dateOfBirth || null,
         languagesKnown: form.languagesKnown ? form.languagesKnown.split(",").map(l => l.trim()).filter(l => l) : [],
+        areaOfSpecialization: form.areaOfSpecialization.trim(),
         profilePhoto: form.photo || "", // Store profile photo URL
       };
 
@@ -526,6 +521,7 @@ export default function TeacherProfile() {
       
       // Reload profile to get updated data including profileCompleted status
       await loadTeacherProfile();
+      await downloadProfilePDF();
     } catch (err) {
       console.error("Failed to save profile:", err);
       // Handle network errors gracefully
@@ -585,7 +581,7 @@ export default function TeacherProfile() {
 
       {/* Teacher-Editable Additional Information */}
       <section style={styles.section}>
-        <h3 style={styles.sectionTitle}>Additional Information (Editable)</h3>
+        <h3 style={styles.sectionTitle}>Additional Information</h3>
         <form onSubmit={onSave} style={styles.profileLayout}>
           {/* Form Content - Left side */}
           <div style={styles.contentContainer}>
@@ -610,17 +606,6 @@ export default function TeacherProfile() {
                   onChange={onChange} 
                   style={styles.input} 
                   max={new Date().toISOString().split("T")[0]}
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Age</label>
-                <input 
-                  type="text" 
-                  value={age !== null ? `${age} years` : "Enter date of birth"} 
-                  style={{...styles.input, ...styles.readOnlyInput}} 
-                  readOnly 
-                  disabled
                 />
               </div>
 
@@ -653,8 +638,15 @@ export default function TeacherProfile() {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Experience</label>
-                <input name="experience" value={form.experience} onChange={onChange} style={styles.input} placeholder="e.g., 8 years" />
+                <label style={styles.label}>Area of Specialization</label>
+                <input
+                  name="areaOfSpecialization"
+                  value={form.areaOfSpecialization}
+                  onChange={onChange}
+                  style={styles.input}
+                  placeholder="Enter area of specialization"
+                  required
+                />
               </div>
 
               <div style={styles.formGroupFull}>
@@ -863,7 +855,7 @@ const styles = {
     justifyContent: "flex-end",
     gap: 12,
     flexWrap: "wrap",
-  },
+     },
   primaryButton: {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     color: "white",
