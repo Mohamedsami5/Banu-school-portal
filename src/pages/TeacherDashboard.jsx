@@ -5,8 +5,8 @@ import {
   PieChart, Pie, Legend,
 } from "recharts";
 import SummaryCard from "../components/SummaryCard";
+import { API_BASE } from "../config/api";
 
-const API_BASE   = "http://localhost:5000/api";
 const EXAM_TYPES = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
 const PASS_MARK  = 35;
 

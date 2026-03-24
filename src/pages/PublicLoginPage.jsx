@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PublicLoginPage.css";
+import { API_BASE } from "../config/api";
 
 export default function PublicLoginPage() {
   const navigate = useNavigate();
@@ -18,7 +19,10 @@ export default function PublicLoginPage() {
       ...prev,
       [name]: value,
     }));
-    setError("");
+    // Clear error when user starts typing or changes form data
+    if (error) {
+      setError("");
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -27,7 +31,7 @@ export default function PublicLoginPage() {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -35,7 +39,20 @@ export default function PublicLoginPage() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      // Check if response is ok before trying to parse JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If JSON parsing fails, the server might be down or returning invalid response
+        if (!response.ok) {
+          setError("Cannot reach the server. Please make sure the backend is running.");
+        } else {
+          setError("Invalid response from server. Please try again.");
+        }
+        setLoading(false);
+        return;
+      }
 
       if (!response.ok) {
         setError(data.message || "Login failed. Please check your credentials.");
@@ -57,7 +74,7 @@ export default function PublicLoginPage() {
     } catch (err) {
       console.error("Login error:", err);
       // TypeError: Failed to fetch → backend is not reachable
-      if (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) {
+      if (err instanceof TypeError && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("network"))) {
         setError("Cannot reach the server. Please make sure the backend is running.");
       } else {
         setError("An error occurred. Please try again.");

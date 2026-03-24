@@ -4,8 +4,7 @@ import StudentsTable from "../components/StudentsTable";
 import ParentsTable from "../components/ParentsTable";
 import Modal from "../components/Modal";
 import { fetchDashboardStats } from "../services/dashboardService";
-
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function DashboardOverview() {
   const [stats, setStats] = useState({ teachers: 0, students: 0, parents: 0, announcements: 0 });
@@ -48,16 +47,16 @@ export default function DashboardOverview() {
     let url = "";
     switch (section) {
       case "teachers":
-        url = `${API_BASE_URL}/teachers`;
+        url = `${API_BASE}/teachers`;
         break;
       case "students":
-        url = `${API_BASE_URL}/students`;
+        url = `${API_BASE}/students`;
         break;
       case "parents":
-        url = `${API_BASE_URL}/parents`;
+        url = `${API_BASE}/parents`;
         break;
       case "announcements":
-        url = `${API_BASE_URL}/announcements`;
+        url = `${API_BASE}/announcements`;
         break;
       default:
         setLoading(false);

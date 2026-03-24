@@ -1,8 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import StudentSidebar from "../components/StudentSidebar";
+import StudentDashboardOverview from "./StudentDashboardOverview";
+import StudentMarks from "./StudentMarks";
+import StudentHomework from "./StudentHomework";
+import StudentEventsView from "./StudentEventsView";
+import StudentAnnouncementsView from "./StudentAnnouncementsView";
+import StudentLeaveApplication from "./StudentLeaveApplication";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
+  const [page, setPage] = useState("overview");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,10 +38,10 @@ export default function StudentDashboard() {
     }
   }, [navigate]);
 
-  const handleLogout = () => {
+  function handleLogout() {
     localStorage.removeItem("user");
     navigate("/login");
-  };
+  }
 
   if (loading) {
     return (
@@ -41,83 +51,74 @@ export default function StudentDashboard() {
     );
   }
 
+  function renderMain() {
+    switch (page) {
+      case "marks":
+        return <StudentMarks user={user} />;
+      case "homework":
+        return <StudentHomework user={user} />;
+      case "events":
+        return <StudentEventsView />;
+      case "announcements":
+        return <StudentAnnouncementsView />;
+      case "leave":
+        return <StudentLeaveApplication user={user} />;
+      default:
+        return <StudentDashboardOverview user={user} />;
+    }
+  }
+
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>Student Dashboard</h1>
-        <button type="button" style={styles.logoutBtn} onClick={handleLogout}>
-          Logout
-        </button>
-      </header>
-      <main style={styles.main}>
-        <p style={styles.welcome}>Welcome to Student Dashboard</p>
-        {user?.name && (
-          <p style={styles.sub}>Hello, {user.name}</p>
-        )}
-      </main>
+    <div style={styles.appRoot}>
+      <Header
+        title="Student Dashboard"
+        onLogout={handleLogout}
+        admin={user}
+        onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
+
+      <div style={styles.container}>
+        <StudentSidebar
+          active={page}
+          isCollapsed={isSidebarCollapsed}
+          onNavigate={(id) => {
+            if (id === "logout") {
+              handleLogout();
+              return;
+            }
+            setPage(id);
+          }}
+        />
+
+        <main style={styles.main}>{renderMain()}</main>
+      </div>
     </div>
   );
 }
 
 const styles = {
-  page: {
-    minHeight: "100vh",
-    backgroundColor: "#f5f7fa",
+  appRoot: {
     display: "flex",
     flexDirection: "column",
+    width: "100%",
+    minHeight: "100vh",
+    backgroundColor: "#f5f7fa",
+  },
+  container: {
+    display: "flex",
+    flex: 1,
+  },
+  main: {
+    flex: 1,
+    padding: "20px",
+    overflowY: "auto",
   },
   loading: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: "100vh",
-    fontSize: 18,
+    fontSize: "18px",
     color: "#6b7280",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "16px 24px",
-    background: "white",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-  },
-  title: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 700,
-    color: "#213547",
-    background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  logoutBtn: {
-    padding: "8px 16px",
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#6b7280",
-    background: "#f3f4f6",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-  },
-  main: {
-    flex: 1,
-    padding: 24,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  welcome: {
-    fontSize: 22,
-    fontWeight: 600,
-    color: "#213547",
-    margin: 0,
-  },
-  sub: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginTop: 8,
   },
 };

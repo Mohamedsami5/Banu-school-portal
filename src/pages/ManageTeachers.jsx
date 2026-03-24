@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import TeachersTable from "../components/TeachersTable";
-
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 // Subjects for primary and senior classes
 const SUBJECTS_PRIMARY = ["Tamil", "English", "Maths", "Science", "Social Science", "Computer Science"];
@@ -85,7 +84,7 @@ export default function ManageTeachers() {
       setLoading(true);
       setError("");
       
-      const response = await fetch(`${API_BASE_URL}/teachers`, {
+      const response = await fetch(`${API_BASE}/teachers`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json"
@@ -124,7 +123,7 @@ export default function ManageTeachers() {
       // Only show error for actual network/server failures
       // Empty arrays are NOT errors - they're handled in the UI
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to load teachers");
       }
@@ -149,7 +148,7 @@ export default function ManageTeachers() {
         ? formData.dateOfJoining.trim() 
         : null;
 
-      const response = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/classes`, {
+      const response = await fetch(`${API_BASE}/admin/teachers/${editTeacherId}/classes`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -184,7 +183,7 @@ export default function ManageTeachers() {
         ? formData.dateOfJoining.trim() 
         : null;
 
-      const response = await fetch(`${API_BASE_URL}/admin/teachers`, {
+      const response = await fetch(`${API_BASE}/admin/teachers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -276,7 +275,7 @@ export default function ManageTeachers() {
     }
     clearMessages();
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/credentials`, {
+      const res = await fetch(`${API_BASE}/admin/teachers/${editTeacherId}/credentials`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: credentialPassword.trim() })
@@ -303,7 +302,7 @@ export default function ManageTeachers() {
     }
     clearMessages();
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/teachers/${editTeacherId}/credentials`, {
+      const res = await fetch(`${API_BASE}/admin/teachers/${editTeacherId}/credentials`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: credentialEmail.trim() })
@@ -355,7 +354,7 @@ export default function ManageTeachers() {
     const idToDelete = selectedTeacher._id || selectedTeacher.id;
     console.log("Deleting teacher id:", idToDelete);
     try {
-      const res = await fetch(`${API_BASE_URL}/teachers/${idToDelete}`, {
+      const res = await fetch(`${API_BASE}/teachers/${idToDelete}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" }
       });
@@ -1050,3 +1049,4 @@ const styles = {
     fontStyle: "italic",
   },
 };
+

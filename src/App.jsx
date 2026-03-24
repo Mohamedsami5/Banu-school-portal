@@ -13,9 +13,11 @@ import TeacherFeedback from "./pages/TeacherFeedback";
 import AssignClasses from "./pages/AssignClasses";
 import EnterMarks from "./pages/EnterMarks";
 import Homework from "./pages/Homework";
+import TeacherHomeworkSubmissions from "./pages/TeacherHomeworkSubmissions";
 import ParentFeedback from "./pages/ParentFeedback";
 import StudentFeedback from "./pages/StudentFeedback";
 import StudentDashboard from "./pages/StudentDashboard";
+import LeaveRequests from "./pages/LeaveRequests";
 
 function App() {
   const [toast, setToast] = useState(null);
@@ -40,6 +42,8 @@ function App() {
           <Route path="assign-classes" element={<AssignClasses />} />
           <Route path="marks" element={<EnterMarks />} />
           <Route path="homework" element={<Homework />} />
+          <Route path="homework-submissions" element={<TeacherHomeworkSubmissions />} />
+          <Route path="leave-requests" element={<LeaveRequests />} />
         </Route>
 
         {/* Student Dashboard */}

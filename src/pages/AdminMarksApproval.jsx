@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function AdminMarksApproval() {
   const [admin, setAdmin] = useState(null);
@@ -12,6 +11,7 @@ export default function AdminMarksApproval() {
   const [statusFilter, setStatusFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   // ==============================
   // CHECK ADMIN LOGIN
@@ -74,10 +74,10 @@ export default function AdminMarksApproval() {
       const search = searchTerm.toLowerCase();
       data = data.filter(
         (m) =>
-          m.studentName.toLowerCase().includes(search) ||
-          m.rollNo.toLowerCase().includes(search) ||
-          m.subject.toLowerCase().includes(search) ||
-          m.className.toLowerCase().includes(search)
+          String(m.studentName || "").toLowerCase().includes(search) ||
+          String(m.rollNo || "").toLowerCase().includes(search) ||
+          String(m.subject || "").toLowerCase().includes(search) ||
+          String(m.className || "").toLowerCase().includes(search)
       );
     }
 
@@ -111,6 +111,29 @@ export default function AdminMarksApproval() {
       setError("Failed to update status");
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const deleteMark = async (id) => {
+    if (!window.confirm("Delete this mark permanently?")) return;
+    try {
+      setDeletingId(id);
+      setError("");
+
+      const res = await fetch(`${API_BASE}/marks/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete mark");
+
+      const next = marks.filter((m) => m._id !== id);
+      setMarks(next);
+      setSuccess("Mark deleted successfully");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError("Failed to delete mark");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -167,6 +190,7 @@ export default function AdminMarksApproval() {
                 <th style={styles.th}>Class</th>
                 <th style={styles.th}>Section</th>
                 <th style={styles.th}>Subject</th>
+                <th style={styles.th}>Exam Type</th>
                 <th style={styles.th}>Marks</th>
                 <th style={styles.th}>Status</th>
                 <th style={styles.th}>Actions</th>
@@ -188,37 +212,50 @@ export default function AdminMarksApproval() {
                   <td style={styles.td}>{m.className}</td>
                   <td style={styles.td}>{m.section}</td>
                   <td style={styles.td}>{m.subject}</td>
+                  <td style={styles.td}>{m.examType || "—"}</td>
                   <td style={{ ...styles.td, fontWeight: 600 }}>{m.marks}</td>
                   <td style={styles.td}>
                     <span style={statusBadgeStyle(m.status)}>{m.status}</span>
                   </td>
                   <td style={styles.td}>
-                    {m.status === "Pending" ? (
-                      <div style={styles.actionGroup}>
-                        <button
-                          style={{
-                            ...styles.approve,
-                            opacity: updatingId === m._id ? 0.6 : 1,
-                          }}
-                          disabled={updatingId === m._id}
-                          onClick={() => updateStatus(m._id, "Approved")}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          style={{
-                            ...styles.reject,
-                            opacity: updatingId === m._id ? 0.6 : 1,
-                          }}
-                          disabled={updatingId === m._id}
-                          onClick={() => updateStatus(m._id, "Rejected")}
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={styles.noAction}>—</span>
-                    )}
+                    <div style={styles.actionGroup}>
+                      {m.status === "Pending" ? (
+                        <>
+                          <button
+                            style={{
+                              ...styles.approve,
+                              opacity: updatingId === m._id ? 0.6 : 1,
+                            }}
+                            disabled={updatingId === m._id || deletingId === m._id}
+                            onClick={() => updateStatus(m._id, "Approved")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            style={{
+                              ...styles.reject,
+                              opacity: updatingId === m._id ? 0.6 : 1,
+                            }}
+                            disabled={updatingId === m._id || deletingId === m._id}
+                            onClick={() => updateStatus(m._id, "Rejected")}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : (
+                        <span style={styles.noAction}>—</span>
+                      )}
+                      <button
+                        style={{
+                          ...styles.delete,
+                          opacity: deletingId === m._id ? 0.6 : 1,
+                        }}
+                        disabled={deletingId === m._id || updatingId === m._id}
+                        onClick={() => deleteMark(m._id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -365,6 +402,16 @@ const styles = {
   reject: {
     padding: "6px 14px",
     background: "linear-gradient(135deg, #f87171 0%, #dc2626 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 13,
+  },
+  delete: {
+    padding: "6px 14px",
+    background: "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)",
     color: "#fff",
     border: "none",
     borderRadius: 6,

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import StudentsTable from "../components/StudentsTable";
-
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 const CLASS_OPTIONS = ["LKG","UKG", ...Array.from({length:12}, (_,i)=>String(i+1))];
 const SECTION_OPTIONS = ["A","B","C"];
@@ -35,7 +34,7 @@ export default function ManageStudents() {
       setLoading(true);
       setError("");
       
-      const response = await fetch(`${API_BASE_URL}/students`, {
+      const response = await fetch(`${API_BASE}/students`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json"
@@ -61,7 +60,7 @@ export default function ManageStudents() {
       // Only show error for actual network/server failures
       // Empty arrays are NOT errors - they're handled in the UI
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to load students");
       }
@@ -109,14 +108,14 @@ export default function ManageStudents() {
       if (selectedStudent && (selectedStudent._id || selectedStudent.id)) {
         // Update existing student
         const id = selectedStudent._id || selectedStudent.id;
-        res = await fetch(`${API_BASE_URL}/students/${id}`, {
+        res = await fetch(`${API_BASE}/students/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData)
         });
       } else {
         // Create new student
-        res = await fetch(`${API_BASE_URL}/students`, {
+        res = await fetch(`${API_BASE}/students`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...formData, password })
@@ -174,7 +173,7 @@ export default function ManageStudents() {
     const idToDelete = selectedStudent._id || selectedStudent.id;
     console.log("Deleting student id:", idToDelete);
     try {
-      const res = await fetch(`${API_BASE_URL}/students/${idToDelete}`, {
+      const res = await fetch(`${API_BASE}/students/${idToDelete}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" }
       });
@@ -663,3 +662,4 @@ const styles = {
     fontSize: 14,
   },
 };
+

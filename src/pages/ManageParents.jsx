@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ParentsTable from "../components/ParentsTable";
-
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function ManageParents() {
   const [parents, setParents] = useState([]);
@@ -32,7 +31,7 @@ export default function ManageParents() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(`${API_BASE_URL}/parents`, {
+      const response = await fetch(`${API_BASE}/parents`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json"
@@ -63,7 +62,7 @@ export default function ManageParents() {
       setError("");
     } catch (err) {
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to load parents");
       }
@@ -105,7 +104,7 @@ export default function ManageParents() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/parents`, {
+      const response = await fetch(`${API_BASE}/parents`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -175,7 +174,7 @@ export default function ManageParents() {
   const handleDeleteConfirm = async () => {
     if (!selectedParent) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/parents/${selectedParent.id}`, {
+      const response = await fetch(`${API_BASE}/parents/${selectedParent.id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json"
@@ -616,3 +615,4 @@ const styles = {
     fontSize: 14,
   },
 };
+

@@ -9,6 +9,7 @@ import ManageParents from "./ManageParents";
 import Announcements from "./Announcements";
 import EventsAchievements from "./EventsAchievements";
 import AdminMarksApproval from "./AdminMarksApproval"; 
+import LeaveRequests from "./LeaveRequests";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -58,6 +59,8 @@ export default function AdminDashboard() {
         return <Announcements />;
       case "events":
         return <EventsAchievements />;
+      case "leave-requests":
+        return <LeaveRequests />;
       case "marks":                        
         return <AdminMarksApproval />;
       default:

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function Announcements() {
   const [announcements, setAnnouncements] = useState([]);
@@ -21,7 +20,7 @@ export default function Announcements() {
     try {
       setLoading(true);
       setError("");
-      const response = await fetch(`${API_BASE_URL}/announcements`, {
+      const response = await fetch(`${API_BASE}/announcements`, {
         method: "GET",
         headers: { "Content-Type": "application/json" }
       });
@@ -44,7 +43,7 @@ export default function Announcements() {
       setAnnouncements(formatted);
     } catch (err) {
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to load announcements");
       }
@@ -62,7 +61,7 @@ export default function Announcements() {
     }
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/announcements`, {
+      const response = await fetch(`${API_BASE}/announcements`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -367,3 +366,4 @@ const styles = {
     margin: 0,
   },
 };
+

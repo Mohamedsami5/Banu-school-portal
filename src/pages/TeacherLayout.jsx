@@ -2,8 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
-
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function TeacherLayout() {
   const navigate = useNavigate();
@@ -58,6 +57,8 @@ export default function TeacherLayout() {
     { id: "classes", label: "Assign Classes", color: "#4facfe" },
     { id: "marks", label: "Student Marks", color: "#43e97b" },
     { id: "homework", label: "Homework", color: "#fa709a" },
+    { id: "homework-submissions", label: "Homework Submissions", color: "#f59e0b" },
+    { id: "leave-requests", label: "Leave Requests", color: "#0ea5e9" },
     { id: "profile", label: "Profile", color: "#22c55e" },
     { id: "logout", label: "Logout", color: "#ef5350" },
   ];
@@ -68,7 +69,9 @@ export default function TeacherLayout() {
     if (p.includes("/teacher/feedback")) return "feedback";
     if (p.includes("/teacher/assign-classes")) return "classes";
     if (p.includes("/teacher/marks") || p.includes("/teacher/enter-marks")) return "marks";
+    if (p.includes("/teacher/homework-submissions")) return "homework-submissions";
     if (p.includes("/teacher/homework")) return "homework";
+    if (p.includes("/teacher/leave-requests")) return "leave-requests";
     if (p.includes("/teacher/profile")) return "profile";
     return "dashboard";
   };
@@ -80,6 +83,8 @@ export default function TeacherLayout() {
     if (id === "classes") return navigate("/teacher/assign-classes");
     if (id === "marks") return navigate("/teacher/marks");
     if (id === "homework") return navigate("/teacher/homework");
+    if (id === "homework-submissions") return navigate("/teacher/homework-submissions");
+    if (id === "leave-requests") return navigate("/teacher/leave-requests");
     if (id === "profile") return navigate("/teacher/profile");
   };
 

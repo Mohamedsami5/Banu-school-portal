@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Header from "../components/Header";
-
-const API = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function ParentFeedback() {
   const [parent, setParent] = useState(null);
@@ -22,7 +21,7 @@ export default function ParentFeedback() {
 
   const loadFeedback = async (parentId) => {
     try {
-      const res = await fetch(`${API}/feedback/parent/${parentId}`);
+      const res = await fetch(`${API_BASE}/feedback/parent/${parentId}`);
       const data = await res.json();
       setFeedbacks(data || []);
     } catch (err) {

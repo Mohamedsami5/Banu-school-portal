@@ -1,19 +1,17 @@
 import React from "react";
 
-const defaultItems = [
+const studentMenuItems = [
   { id: "overview", label: "Dashboard", color: "#667eea" },
-  { id: "teachers", label: "Manage Teachers", color: "#f093fb" },
-  { id: "students", label: "Manage Students", color: "#4facfe" },
-  { id: "parents", label: "Manage Parents", color: "#43e97b" },
-  { id: "announcements", label: "Announcements", color: "#fa709a" },
+  { id: "marks", label: "Marks", color: "#4facfe" },
+  { id: "homework", label: "Homework", color: "#43e97b" },
   { id: "events", label: "Events & Achievements", color: "#a855f7" },
-  { id: "leave-requests", label: "Leave Requests", color: "#0ea5e9" },
-  { id: "marks", label: "Marks Approval", color: "#ff9800" },
+  { id: "announcements", label: "Announcements", color: "#fa709a" },
+  { id: "leave", label: "Leave Application", color: "#0ea5e9" },
   { id: "logout", label: "Logout", color: "#ef5350" },
 ];
 
-export default function Sidebar({
-  items = defaultItems,
+export default function StudentSidebar({
+  items = studentMenuItems,
   active,
   onNavigate,
   isCollapsed = false,

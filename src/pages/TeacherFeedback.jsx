@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-
-const API = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function TeacherFeedback() {
   const [teacher, setTeacher] = useState(null);
@@ -40,7 +39,7 @@ export default function TeacherFeedback() {
     const loadAssignments = async () => {
       try {
         const res = await fetch(
-          `${API}/teacher/assignments?teacherId=${encodeURIComponent(teacherId)}`
+          `${API_BASE}/teacher/assignments?teacherId=${encodeURIComponent(teacherId)}`
         );
         const data = await res.json().catch(() => []);
         if (res.ok && Array.isArray(data)) {
@@ -61,7 +60,7 @@ export default function TeacherFeedback() {
       try {
         setIsLoadingSaved(true);
         const res = await fetch(
-          `${API}/feedback?teacherId=${encodeURIComponent(teacherId)}`
+          `${API_BASE}/feedback?teacherId=${encodeURIComponent(teacherId)}`
         );
         const data = await res.json().catch(() => []);
         if (!res.ok) {
@@ -120,7 +119,7 @@ export default function TeacherFeedback() {
     try {
       setMessage("Loading students...");
       const res = await fetch(
-        `${API}/students?class=${encodeURIComponent(
+        `${API_BASE}/students?class=${encodeURIComponent(
           className
         )}&section=${encodeURIComponent(section)}`
       );
@@ -169,7 +168,7 @@ export default function TeacherFeedback() {
         };
         if (student.parentId) payload.parentId = student.parentId;
 
-        const res = await fetch(`${API}/feedback`, {
+        const res = await fetch(`${API_BASE}/feedback`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -183,7 +182,7 @@ export default function TeacherFeedback() {
 
       await Promise.all(requests);
 
-      const res = await fetch(`${API}/feedback?teacherId=${encodeURIComponent(teacherId)}`);
+      const res = await fetch(`${API_BASE}/feedback?teacherId=${encodeURIComponent(teacherId)}`);
       const data = await res.json().catch(() => []);
       setSavedFeedbacks(Array.isArray(data) ? data : []);
 
@@ -398,7 +397,7 @@ export default function TeacherFeedback() {
                           if (!ok) return;
                           try {
                             const res = await fetch(
-                              `${API}/feedback/${fb._id}`,
+                              `${API_BASE}/feedback/${fb._id}`,
                               {
                                 method: "DELETE",
                               }

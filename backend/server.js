@@ -10,10 +10,13 @@ import Student from "./models/Student.js";
 import Parent from "./models/Parent.js";
 import Mark from "./models/Mark.js";
 import Homework from "./models/Homework.js";
+import HomeworkSubmission from "./models/HomeworkSubmission.js";
+import LeaveApplication from "./models/LeaveApplication.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import eventsRoutes from "./routes/eventsRoutes.js";
+import homeworkUpload from "./config/multerHomework.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -137,26 +140,19 @@ mongoose.connect(MONGODB_URI, mongooseOptions)
     await migrateMarksIndex();
 
     // Start server only after MongoDB connection is established
-    // Start with a function that handles EADDRINUSE by retrying the next port
-    const startServer = (port) => {
-      const server = app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
-        console.log(`API endpoints available at http://localhost:${port}/api`);
-      });
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`API endpoints available at http://localhost:${PORT}/api`);
+    });
 
-      server.on("error", (err) => {
-        if (err.code === "EADDRINUSE") {
-          console.error(`Port ${port} is already in use. Trying port ${port + 1}...`);
-          // Try the next port after a short delay
-          setTimeout(() => startServer(port + 1), 1000);
-        } else {
-          console.error("Server error:", err);
-          process.exit(1);
-        }
-      });
-    };
-
-    startServer(PORT);
+    server.on("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        console.error(`Port ${PORT} is already in use. Please stop the other process or change PORT.`);
+        process.exit(1);
+      }
+      console.error("Server error:", err);
+      process.exit(1);
+    });
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err.message);
@@ -590,6 +586,194 @@ app.get("/api/students", async (req, res) => {
     } else {
       res.status(500).json({ message: "Error fetching students", error: error.message });
     }
+  }
+});
+
+// Leave application routes
+// POST /api/leave/apply - student applies for leave
+app.post("/api/leave/apply", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const {
+      studentId,
+      studentName,
+      rollNo,
+      className,
+      section,
+      leaveType,
+      startDate,
+      endDate,
+      reason,
+    } = req.body || {};
+
+    if (
+      !studentId ||
+      !studentName ||
+      !rollNo ||
+      !className ||
+      !section ||
+      !leaveType ||
+      !startDate ||
+      !endDate
+    ) {
+      return res.status(400).json({
+        message:
+          "studentId, studentName, rollNo, className, section, leaveType, startDate and endDate are required",
+      });
+    }
+
+    const parsedStart = new Date(startDate);
+    const parsedEnd = new Date(endDate);
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+      return res.status(400).json({ message: "Invalid startDate or endDate format" });
+    }
+    if (parsedEnd < parsedStart) {
+      return res.status(400).json({ message: "End Date cannot be before Start Date" });
+    }
+
+    const leave = new LeaveApplication({
+      studentId,
+      studentName: String(studentName).trim(),
+      rollNo: String(rollNo).trim(),
+      className: String(className).trim(),
+      section: String(section).trim(),
+      leaveType: String(leaveType).trim(),
+      startDate: parsedStart,
+      endDate: parsedEnd,
+      reason: reason ? String(reason).trim() : "",
+      status: "Pending",
+    });
+
+    const saved = await leave.save();
+    return res.status(201).json(saved);
+  } catch (error) {
+    console.error("Error applying for leave:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res
+        .status(503)
+        .json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res
+      .status(500)
+      .json({ message: "Error applying for leave", error: error.message });
+  }
+});
+
+// GET /api/leave - list leave applications
+// Optional filters: studentId, status, className, section
+app.get("/api/leave", async (req, res) => {
+  try {
+    checkMongoConnection();
+    const { studentId, status, className, section } = req.query;
+
+    const filter = {};
+    if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
+      filter.studentId = studentId;
+    }
+    if (status) {
+      filter.status = String(status).trim();
+    }
+    if (className) {
+      filter.className = String(className).trim();
+    }
+    if (section) {
+      filter.section = String(section).trim();
+    }
+
+    const leaves = await LeaveApplication.find(filter)
+      .sort({ appliedAt: -1 })
+      .lean();
+
+    return res.json(Array.isArray(leaves) ? leaves : []);
+  } catch (error) {
+    console.error("Error fetching leave applications:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res
+        .status(503)
+        .json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res
+      .status(500)
+      .json({ message: "Error fetching leave applications", error: error.message });
+  }
+});
+
+// PUT /api/leave/:id/status - approve / reject leave (with validation when approving)
+app.put("/api/leave/:id/status", async (req, res) => {
+  try {
+    checkMongoConnection();
+    const { id } = req.params;
+    const { status } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid leave application ID" });
+    }
+
+    if (!["Pending", "Approved", "Rejected"].includes(status)) {
+      return res
+        .status(400)
+        .json({ message: "Status must be Pending, Approved, or Rejected" });
+    }
+
+    const leave = await LeaveApplication.findById(id);
+    if (!leave) {
+      return res.status(404).json({ message: "Leave application not found" });
+    }
+
+    // Prevent approving/rejecting already processed requests
+    if (leave.status !== "Pending") {
+      return res.status(400).json({
+        message: "This leave request has already been processed. Only pending requests can be approved or rejected.",
+      });
+    }
+
+    // When approving, validate leave dates and type
+    if (status === "Approved") {
+      const start = leave.startDate ? new Date(leave.startDate) : null;
+      const end = leave.endDate ? new Date(leave.endDate) : null;
+      if (!start || !end) {
+        return res.status(400).json({
+          message: "Leave application has invalid or missing dates. Cannot approve.",
+        });
+      }
+      if (end < start) {
+        return res.status(400).json({
+          message: "End date cannot be earlier than start date. Cannot approve.",
+        });
+      }
+      const leaveType = (leave.leaveType || "Leave").toString().trim();
+      if (leaveType === "Medical") {
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        const daysDiff = (end.getTime() - start.getTime()) / oneDayMs;
+        if (daysDiff < 1) {
+          return res.status(400).json({
+            message: "Medical leave must be for at least 2 days. Cannot approve.",
+          });
+        }
+      }
+    }
+
+    const updated = await LeaveApplication.findByIdAndUpdate(
+      id,
+      { $set: { status } },
+      { new: true }
+    );
+
+    return res.json({
+      message: `Leave ${status === "Approved" ? "approved" : status === "Rejected" ? "rejected" : "updated"} successfully`,
+      data: updated,
+    });
+  } catch (error) {
+    console.error("Error updating leave status:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res
+        .status(503)
+        .json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res
+      .status(500)
+      .json({ message: "Error updating leave status", error: error.message });
   }
 });
 
@@ -1486,12 +1670,45 @@ app.get("/api/marks/analytics/mark-range-count", async (req, res) => {
   }
 });
 
+// GET /api/marks/by-group - Fetch marks by class/section/subject/examType
+// Query params: className, section, subject, examType (required), teacherId (optional)
+app.get("/api/marks/by-group", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { teacherId, className, section, subject, examType } = req.query;
+
+    if (!className || !section || !subject || !examType) {
+      return res.status(400).json({
+        message: "className, section, subject, and examType are required"
+      });
+    }
+
+    const filter = {
+      className: String(className).trim(),
+      section:   String(section).trim(),
+      subject:   String(subject).trim(),
+      examType:  String(examType).trim(),
+    };
+    if (teacherId) filter.teacherId = teacherId;
+
+    const marks = await Mark.find(filter).sort({ rollNo: 1, studentName: 1 });
+    return res.json(Array.isArray(marks) ? marks : []);
+  } catch (error) {
+    console.error("Error fetching marks by group:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching marks", error: error.message });
+  }
+});
+
 // GET /api/marks - Fetch submitted marks
-// Query params: teacherId (required), examType (optional), className, section, subject
+// Query params: teacherId (optional), examType (optional), className, section, subject, status
 app.get("/api/marks", async (req, res) => {
   try {
     checkMongoConnection();
-    const { teacherId, examType, className, section, subject } = req.query;
+    const { teacherId, examType, className, section, subject, status } = req.query;
 
     const filter = {};
     if (teacherId)  filter.teacherId  = teacherId;
@@ -1499,6 +1716,7 @@ app.get("/api/marks", async (req, res) => {
     if (className)  filter.className  = String(className).trim();
     if (section)    filter.section    = String(section).trim();
     if (subject)    filter.subject    = String(subject).trim();
+    if (status)     filter.status     = String(status).trim();
 
     const marks = await Mark.find(filter).sort({ createdAt: -1 });
     res.json(Array.isArray(marks) ? marks : []);
@@ -1548,6 +1766,31 @@ app.put("/api/marks/:id/status", async (req, res) => {
       return res.status(503).json({ message: "Database connection unavailable", error: error.message });
     }
     return res.status(500).json({ message: "Error updating mark status", error: error.message });
+  }
+});
+
+// DELETE /api/marks/:id - Admin delete a mark
+app.delete("/api/marks/:id", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid mark ID" });
+    }
+
+    const deleted = await Mark.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Mark not found" });
+    }
+
+    return res.status(200).json({ message: "Mark deleted successfully", data: deleted });
+  } catch (error) {
+    console.error("Error deleting mark:", error.stack || error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error deleting mark", error: error.message });
   }
 });
 
@@ -1703,7 +1946,7 @@ async function submitBulkMarks(req, res) {
             marks:       marksNum,
             teacherEmail: teacher.email,
             teacherId:   teacher._id,
-            status:      "Pending"   // always reset to Pending on edit
+            status:      "Pending"
           }
         };
 
@@ -1873,5 +2116,206 @@ app.post("/api/homework", async (req, res) => {
       return res.status(503).json({ message: "Database connection unavailable", error: error.message });
     }
     res.status(500).json({ message: "Error creating homework", error: error.message });
+  }
+});
+
+// POST /api/homework/submit - student submits homework with text + optional photo
+app.post("/api/homework/submit", homeworkUpload.single("photo"), async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const {
+      homeworkId,
+      studentId,
+      rollNo,
+      studentName,
+      answerText
+    } = req.body || {};
+
+    if (!homeworkId || !studentId || !rollNo || !studentName) {
+      return res.status(400).json({
+        message: "homeworkId, studentId, rollNo, and studentName are required"
+      });
+    }
+
+    const text = String(answerText || "").trim();
+    const photoPath = req.file ? `/uploads/homework/${req.file.filename}` : "";
+
+    if (!text && !photoPath) {
+      return res.status(400).json({ message: "Provide answer text or upload a photo" });
+    }
+
+    const homework = await Homework.findById(homeworkId).select("_id").lean();
+    if (!homework) {
+      return res.status(404).json({ message: "Homework not found" });
+    }
+
+    const submission = new HomeworkSubmission({
+      homeworkId,
+      studentId,
+      rollNo: String(rollNo).trim(),
+      studentName: String(studentName).trim(),
+      answerText: text,
+      photo: photoPath,
+      submittedAt: new Date(),
+      status: "Pending"
+    });
+
+    const saved = await submission.save();
+    return res.status(201).json({ message: "Homework submitted", data: saved });
+  } catch (error) {
+    console.error("Error submitting homework:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error submitting homework", error: error.message });
+  }
+});
+
+// GET /api/homework/submission - get a student's submission for a homework
+// Query params: homeworkId (required), studentId (required)
+app.get("/api/homework/submission", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { homeworkId, studentId } = req.query;
+    if (!homeworkId || !studentId) {
+      return res.status(400).json({ message: "homeworkId and studentId are required" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(homeworkId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ message: "Invalid homeworkId or studentId" });
+    }
+
+    const submission = await HomeworkSubmission.findOne({
+      homeworkId,
+      studentId
+    }).sort({ submittedAt: -1 });
+
+    return res.json(submission || null);
+  } catch (error) {
+    console.error("Error fetching homework submission:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching submission", error: error.message });
+  }
+});
+
+// GET /api/homework/submissions - list submissions for a teacher
+// Query params: teacherId (required), status (optional)
+app.get("/api/homework/submissions", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { teacherId, status } = req.query;
+    if (!teacherId) {
+      return res.status(400).json({ message: "teacherId is required" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+      return res.status(400).json({ message: "Invalid teacherId" });
+    }
+    if (status && !["Pending", "Approved", "Rejected"].includes(String(status))) {
+      return res.status(400).json({ message: "status must be Pending, Approved, or Rejected" });
+    }
+
+    const homeworks = await Homework.find({ teacherId })
+      .select("_id title subject className section dueDate teacherId")
+      .lean();
+
+    if (!homeworks || homeworks.length === 0) {
+      return res.json([]);
+    }
+
+    const homeworkIds = homeworks.map((h) => h._id);
+    const filter = { homeworkId: { $in: homeworkIds } };
+    if (status) filter.status = String(status);
+
+    const submissions = await HomeworkSubmission.find(filter)
+      .populate("homeworkId", "title subject className section dueDate teacherId")
+      .sort({ submittedAt: -1 });
+
+    return res.json(Array.isArray(submissions) ? submissions : []);
+  } catch (error) {
+    console.error("Error fetching homework submissions:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching submissions", error: error.message });
+  }
+});
+
+// PUT /api/homework/submissions/:id/status - approve or reject submission
+app.put("/api/homework/submissions/:id/status", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { id } = req.params;
+    const { status } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid submission ID" });
+    }
+    if (!["Pending", "Approved", "Rejected"].includes(status)) {
+      return res.status(400).json({ message: "status must be Pending, Approved, or Rejected" });
+    }
+
+    const updated = await HomeworkSubmission.findByIdAndUpdate(
+      id,
+      { $set: { status } },
+      { new: true }
+    ).populate("homeworkId", "title subject className section dueDate teacherId");
+
+    if (!updated) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    return res.json({ message: "Status updated", data: updated });
+  } catch (error) {
+    console.error("Error updating submission status:", error.stack || error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error updating submission", error: error.message });
+  }
+});
+
+// Student routes
+// GET /api/student/marks - Get approved marks for a student
+// Query params: rollNo, className, section (required)
+app.get("/api/student/marks", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { rollNo, className, section } = req.query;
+
+    if (!rollNo || !className || !section) {
+      return res.status(400).json({
+        message: "rollNo, className, and section are required"
+      });
+    }
+
+    // Fetch only approved marks for this student
+    const marks = await Mark.find({
+      rollNo: String(rollNo).trim(),
+      className: String(className).trim(),
+      section: String(section).trim(),
+      status: "Approved"
+    })
+      .select("subject examType marks status")
+      .sort({ subject: 1, examType: 1 });
+
+    res.json(Array.isArray(marks) ? marks : []);
+  } catch (error) {
+    console.error("Error fetching student marks:", error);
+    if (error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({
+        message: "Database connection unavailable",
+        error: error.message
+      });
+    }
+    return res.status(500).json({
+      message: "Error fetching student marks",
+      error: error.message
+    });
   }
 });

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const API_BASE = "http://localhost:5000";
+import { API_BASE, withOrigin } from "../config/api";
 
 export default function EventsAchievements() {
   const [items, setItems] = useState([]);
@@ -23,7 +22,7 @@ export default function EventsAchievements() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE}/api/events`, {
+      const res = await fetch(`${API_BASE}/events`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -35,7 +34,7 @@ export default function EventsAchievements() {
       setItems(Array.isArray(data) ? data : []);
     } catch (err) {
       if (err.message.includes("fetch") || err.message.includes("Failed to fetch")) {
-        setError("Cannot connect to backend. Ensure it is running on http://localhost:5000");
+        setError("Cannot connect to backend. Ensure it is running");
       } else {
         setError(err.message || "Failed to load events and achievements");
       }
@@ -62,7 +61,7 @@ export default function EventsAchievements() {
         body.append("image", formData.image);
       }
 
-      const res = await fetch(`${API_BASE}/api/events`, {
+      const res = await fetch(`${API_BASE}/events`, {
         method: "POST",
         body,
       });
@@ -83,7 +82,7 @@ export default function EventsAchievements() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this item?")) return;
     try {
-      const res = await fetch(`${API_BASE}/api/events/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE}/events/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Delete failed");
@@ -96,8 +95,7 @@ export default function EventsAchievements() {
 
   const imageUrl = (path) => {
     if (!path) return null;
-    const base = path.startsWith("http") ? "" : API_BASE;
-    return base + path;
+    return withOrigin(path);
   };
 
   const formatDate = (d) => {
@@ -419,3 +417,4 @@ const styles = {
     cursor: "pointer",
   },
 };
+

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Header from "../components/Header";
-
-const API = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 export default function StudentFeedback() {
   const [student, setStudent] = useState(null);
@@ -22,7 +21,7 @@ export default function StudentFeedback() {
 
   const loadFeedback = async (studentId) => {
     try {
-      const res = await fetch(`${API}/feedback/student/${studentId}`);
+      const res = await fetch(`${API_BASE}/feedback/student/${studentId}`);
       const data = await res.json();
       setFeedbacks(data || []);
     } catch (err) {

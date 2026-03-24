@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { API_BASE } from "../config/api";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ReferenceLine, Cell, ResponsiveContainer,
 } from "recharts";
 
-const API_BASE   = "http://localhost:5000/api";
 const EXAM_TYPES = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
 const PASS_MARK  = 35;
 

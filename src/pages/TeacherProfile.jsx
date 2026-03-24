@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
-
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "../config/api";
 
 const emptyForm = {
   // Admin-controlled fields (read-only) - not in form, displayed separately
@@ -107,7 +106,7 @@ export default function TeacherProfile() {
       console.error("Failed to load teacher profile:", err);
       // Handle network errors gracefully
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to load profile");
       }
@@ -526,7 +525,7 @@ export default function TeacherProfile() {
       console.error("Failed to save profile:", err);
       // Handle network errors gracefully
       if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000");
+        setError("Cannot connect to backend server. Please ensure the backend is running");
       } else {
         setError(err.message || "Failed to save profile");
       }
@@ -978,3 +977,4 @@ const styles = {
     fontSize: 13,
   },
 };
+
