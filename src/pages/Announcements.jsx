@@ -5,6 +5,7 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
@@ -15,6 +16,21 @@ export default function Announcements() {
   useEffect(() => {
     fetchAnnouncements();
   }, []);
+
+  const getStoredRole = () => {
+    try {
+      const stored = localStorage.getItem("user");
+      const user = stored ? JSON.parse(stored) : null;
+      return user && user.role ? String(user.role).toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  };
+
+  const adminHeaders = () => ({
+    "Content-Type": "application/json",
+    "x-user-role": getStoredRole(),
+  });
 
   const fetchAnnouncements = async () => {
     try {
@@ -63,7 +79,7 @@ export default function Announcements() {
     try {
       const response = await fetch(`${API_BASE}/announcements`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({
           title: formData.title.trim(),
           description: formData.content.trim(),
@@ -81,6 +97,30 @@ export default function Announcements() {
     } catch (err) {
       setError(err.message || "Failed to add announcement");
       console.error("Error adding announcement:", err);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    const ok = window.confirm("Delete this announcement?");
+    if (!ok) return;
+
+    setError("");
+    setDeletingId(id);
+    try {
+      const response = await fetch(`${API_BASE}/announcements/${id}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to delete announcement");
+      }
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setError(err.message || "Failed to delete announcement");
+      console.error("Error deleting announcement:", err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -179,14 +219,29 @@ export default function Announcements() {
               <div style={styles.announcementHeader}>
                 <div style={styles.announcementTitleRow}>
                   <h3 style={styles.announcementTitle}>{announcement.title}</h3>
-                  <span
-                    style={{
-                      ...styles.priorityBadge,
-                      background: getPriorityColor(announcement.priority),
-                    }}
-                  >
-                    {getPriorityLabel(announcement.priority)}
-                  </span>
+                  <div style={styles.cardActions}>
+                    <span
+                      style={{
+                        ...styles.priorityBadge,
+                        background: getPriorityColor(announcement.priority),
+                      }}
+                    >
+                      {getPriorityLabel(announcement.priority)}
+                    </span>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.deleteButton,
+                        opacity: deletingId === announcement.id ? 0.7 : 1,
+                        cursor: deletingId === announcement.id ? "not-allowed" : "pointer",
+                      }}
+                      disabled={deletingId === announcement.id}
+                      onClick={() => handleDeleteAnnouncement(announcement.id)}
+                      aria-label={`Delete announcement ${announcement.title}`}
+                    >
+                      {deletingId === announcement.id ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
                 <div style={styles.announcementMeta}>
                   <span style={styles.date}>{announcement.date}</span>
@@ -332,6 +387,11 @@ const styles = {
     flexWrap: "wrap",
     gap: 12,
   },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
   announcementTitle: {
     fontSize: 20,
     fontWeight: 600,
@@ -346,6 +406,15 @@ const styles = {
     fontWeight: 600,
     color: "white",
     textTransform: "uppercase",
+  },
+  deleteButton: {
+    padding: "6px 10px",
+    borderRadius: 10,
+    border: "1px solid #fecaca",
+    background: "#fff1f2",
+    color: "#dc2626",
+    fontSize: 12,
+    fontWeight: 700,
   },
   announcementMeta: {
     display: "flex",

@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Legend,
 } from "recharts";
 import SummaryCard from "../components/SummaryCard";
+import Modal from "../components/Modal";
 import { API_BASE } from "../config/api";
 
 const EXAM_TYPES = ["Quarterly", "MidTerm", "HalfYearly", "Annual"];
@@ -29,7 +30,14 @@ function useFetch(url) {
     setLoading(true);
     setError("");
     fetch(url)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const json = await r.json().catch(() => null);
+        if (!r.ok) {
+          const message = json?.message || `Request failed (${r.status})`;
+          throw new Error(message);
+        }
+        return json;
+      })
       .then((d) => { if (!cancelled) setData(d); })
       .catch((e) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -70,7 +78,7 @@ function PieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, name })
   );
 }
 
-// ── Class Average Bar Chart ───────────────────────────────────────────────────
+// ── Class Average Bar Chart 
 function ClassAvgChart({ className, section, subject }) {
   const params = className && section && subject
     ? `${API_BASE}/marks/analytics/class-average?className=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&subject=${encodeURIComponent(subject)}`
@@ -517,6 +525,129 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState("");
   const [teacherId, setTeacherId] = useState("");
+  const [cache, setCache] = useState({ assignments: null, students: null, homework: null });
+
+  const [activeSection, setActiveSection] = useState(null); // "classes" | "students" | "homework"
+  const [tableData, setTableData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const applyFilter = useCallback((section, rows, q) => {
+    const query = (q || "").toLowerCase();
+    if (!query) return rows;
+
+    if (section === "classes") {
+      return rows.filter((a) => {
+        const hay = `${a?.className || a?.class || ""} ${a?.section || ""} ${a?.subject || ""}`.toLowerCase();
+        return hay.includes(query);
+      });
+    }
+
+    if (section === "homework") {
+      return rows.filter((h) => {
+        const hay = `${h?.title || ""} ${h?.subject || ""} ${h?.className || ""} ${h?.section || ""} ${h?.description || ""}`.toLowerCase();
+        return hay.includes(query);
+      });
+    }
+
+    // students
+    return rows.filter((s) => {
+      const hay = `${s?.rollNo || ""} ${s?.name || ""} ${s?.email || ""} ${s?.className || ""} ${s?.section || ""}`.toLowerCase();
+      return hay.includes(query);
+    });
+  }, []);
+
+  const handleSearchChange = useCallback((e) => {
+    const val = e.target.value || "";
+    setSearchTerm(val);
+    setFilteredData(applyFilter(activeSection, tableData, val));
+  }, [activeSection, applyFilter, tableData]);
+
+  const handleCloseDetails = useCallback(() => {
+    setActiveSection(null);
+    setTableData([]);
+    setFilteredData([]);
+    setSearchTerm("");
+    setModalError("");
+    setModalLoading(false);
+  }, []);
+
+  const openSection = useCallback(async (section) => {
+    if (!teacherId) return;
+    setActiveSection(section);
+    setModalLoading(true);
+    setModalError("");
+    setSearchTerm("");
+
+    try {
+      let rows = [];
+      let assignmentsForNarrowing = cache.assignments;
+
+      if (section === "classes") {
+        if (Array.isArray(cache.assignments)) {
+          rows = cache.assignments;
+        } else {
+          const res = await fetch(`${API_BASE}/teacher/assignments?teacherId=${encodeURIComponent(teacherId)}`);
+          const data = await res.json().catch(() => []);
+          if (!res.ok) throw new Error(data?.message || "Failed to load classes");
+          rows = Array.isArray(data) ? data : [];
+          setCache((c) => ({ ...c, assignments: rows }));
+          assignmentsForNarrowing = rows;
+        }
+      } else if (section === "students") {
+        if (Array.isArray(cache.students)) {
+          rows = cache.students;
+        } else {
+          const res = await fetch(`${API_BASE}/students`);
+          const data = await res.json().catch(() => []);
+          if (!res.ok) throw new Error(data?.message || "Failed to load students");
+          rows = Array.isArray(data) ? data : [];
+          setCache((c) => ({ ...c, students: rows }));
+        }
+      } else if (section === "homework") {
+        if (Array.isArray(cache.homework)) {
+          rows = cache.homework;
+        } else {
+          const res = await fetch(`${API_BASE}/homework?teacherId=${encodeURIComponent(teacherId)}`);
+          const data = await res.json().catch(() => []);
+          if (!res.ok) throw new Error(data?.message || "Failed to load homework");
+          rows = Array.isArray(data) ? data : [];
+          setCache((c) => ({ ...c, homework: rows }));
+        }
+      }
+
+      // For students, try to narrow to the teacher's assigned class/sections when possible
+      if (section === "students") {
+        // If assignments aren't cached yet (e.g. students opened first), fetch them once for better narrowing
+        if (!Array.isArray(assignmentsForNarrowing)) {
+          const res = await fetch(`${API_BASE}/teacher/assignments?teacherId=${encodeURIComponent(teacherId)}`);
+          const data = await res.json().catch(() => []);
+          if (res.ok) {
+            assignmentsForNarrowing = Array.isArray(data) ? data : [];
+            setCache((c) => ({ ...c, assignments: assignmentsForNarrowing }));
+          }
+        }
+      }
+
+      if (section === "students" && Array.isArray(assignmentsForNarrowing) && assignmentsForNarrowing.length > 0) {
+        const keys = new Set(assignmentsForNarrowing.map((a) => `${a?.className || a?.class || ""}::${a?.section || ""}`));
+        const narrowed = rows.filter((s) => keys.has(`${s?.className || ""}::${s?.section || ""}`));
+        rows = narrowed.length > 0 ? narrowed : rows;
+      }
+
+      setTableData(rows);
+      setFilteredData(applyFilter(section, rows, ""));
+    } catch (err) {
+      console.error(err);
+      setModalError(err.message || "Failed to load details");
+      setTableData([]);
+      setFilteredData([]);
+    } finally {
+      setModalLoading(false);
+    }
+  }, [applyFilter, cache.assignments, cache.homework, cache.students, teacherId]);
 
   useEffect(() => {
     if (didLoadRef.current) return;
@@ -539,9 +670,9 @@ export default function TeacherDashboard() {
       setTeacherId(tid);
 
       const [assignmentsRes, studentsRes, homeworkRes] = await Promise.all([
-        fetch(`${API_BASE}/teacher/assignments?teacherId=${tid}`),
+        fetch(`${API_BASE}/teacher/assignments?teacherId=${encodeURIComponent(tid)}`),
         fetch(`${API_BASE}/students`),
-        fetch(`${API_BASE}/homework?teacherId=${tid}`),
+        fetch(`${API_BASE}/homework?teacherId=${encodeURIComponent(tid)}`),
       ]);
 
       if (!assignmentsRes.ok || !studentsRes.ok || !homeworkRes.ok) {
@@ -552,17 +683,31 @@ export default function TeacherDashboard() {
       const students    = await studentsRes.json().catch(() => []);
       const homework    = await homeworkRes.json().catch(() => []);
 
+      setCache({
+        assignments: Array.isArray(assignments) ? assignments : [],
+        students: Array.isArray(students) ? students : [],
+        homework: Array.isArray(homework) ? homework : [],
+      });
+
       const classSet = new Set();
+      const classSectionKeys = new Set();
       if (Array.isArray(assignments)) {
         assignments.forEach((a) => {
           const key = `${a?.className || ""}-${a?.section || ""}`.trim();
           if (key) classSet.add(key);
+          const key2 = `${a?.className || a?.class || ""}::${a?.section || ""}`.trim();
+          if (key2 && key2 !== "::") classSectionKeys.add(key2);
         });
       }
 
+      const teacherStudents =
+        Array.isArray(students) && classSectionKeys.size > 0
+          ? students.filter((s) => classSectionKeys.has(`${s?.className || ""}::${s?.section || ""}`))
+          : (Array.isArray(students) ? students : []);
+
       setStats({
         classesToday:      classSet.size,
-        totalStudents:     Array.isArray(students)  ? students.length  : 0,
+        totalStudents:     Array.isArray(teacherStudents) ? teacherStudents.length : 0,
         assignmentsPosted: Array.isArray(homework)  ? homework.length  : 0,
       });
     } catch (err) {
@@ -573,18 +718,168 @@ export default function TeacherDashboard() {
     }
   }
 
+  const renderTableContent = () => {
+    if (modalLoading) {
+      return (
+        <div style={styles.placeholderContainer}>
+          <p style={styles.placeholderText}>Loading data...</p>
+        </div>
+      );
+    }
+
+    if (modalError) {
+      return (
+        <div style={styles.errorContainer}>
+          <p style={styles.errorText}>{modalError}</p>
+        </div>
+      );
+    }
+
+    if (!Array.isArray(filteredData) || filteredData.length === 0) {
+      return (
+        <div style={styles.placeholderContainer}>
+          <p style={styles.placeholderText}>{searchTerm ? "No results found" : "No data available"}</p>
+        </div>
+      );
+    }
+
+    if (activeSection === "classes") {
+      return (
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Class</th>
+              <th style={styles.th}>Section</th>
+              <th style={styles.th}>Subject</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((a, idx) => (
+              <tr key={a?._id || `${a?.className || a?.class || ""}-${a?.section || ""}-${a?.subject || ""}-${idx}`}>
+                <td style={styles.td}>{a?.className || a?.class || "-"}</td>
+                <td style={styles.td}>{a?.section || "-"}</td>
+                <td style={styles.td}>{a?.subject || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (activeSection === "homework") {
+      return (
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Title</th>
+              <th style={styles.th}>Subject</th>
+              <th style={styles.th}>Type</th>
+              <th style={styles.th}>Class</th>
+              <th style={styles.th}>Section</th>
+              <th style={styles.th}>Due Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((h, idx) => (
+              <tr key={h?._id || h?.id || `${h?.title || ""}-${idx}`}>
+                <td style={styles.td}>{h?.title || "-"}</td>
+                <td style={styles.td}>{h?.subject || "-"}</td>
+                <td style={styles.td}>{h?.type || "Homework"}</td>
+                <td style={styles.td}>{h?.className || "-"}</td>
+                <td style={styles.td}>{h?.section || "-"}</td>
+                <td style={styles.td}>{h?.dueDate ? new Date(h.dueDate).toLocaleDateString() : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    // students
+    return (
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th style={styles.th}>Roll No</th>
+            <th style={styles.th}>Name</th>
+            <th style={styles.th}>Class</th>
+            <th style={styles.th}>Section</th>
+            <th style={styles.th}>Email</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((s, idx) => (
+            <tr key={s?._id || s?.id || `${s?.rollNo || ""}-${idx}`}>
+              <td style={styles.td}>{s?.rollNo || "-"}</td>
+              <td style={styles.td}>{s?.name || s?.studentName || "-"}</td>
+              <td style={styles.td}>{s?.className || "-"}</td>
+              <td style={styles.td}>{s?.section || "-"}</td>
+              <td style={styles.td}>{s?.email || "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  const modalTitle =
+    activeSection === "classes"
+      ? "Classes"
+      : activeSection === "students"
+      ? "Students"
+      : "Homework";
+
+  const modalSearchPlaceholder =
+    activeSection === "classes"
+      ? "Search class, section or subject"
+      : activeSection === "homework"
+      ? "Search title, subject or class"
+      : "Search by roll no, name, email";
+
   return (
     <div>
       <h2 style={styles.pageTitle}>Dashboard</h2>
 
       {/* Summary cards */}
       <div style={styles.cards}>
-        <SummaryCard title="Classes Today"      value={loading ? "…" : stats.classesToday}      index={0} />
-        <SummaryCard title="Total Students"     value={loading ? "…" : stats.totalStudents}     index={1} />
-        <SummaryCard title="Assignments Posted" value={loading ? "…" : stats.assignmentsPosted} index={2} />
+        <SummaryCard
+          title="Classes Today"
+          value={loading ? "…" : stats.classesToday}
+          index={0}
+          onClick={() => openSection("classes")}
+        />
+        <SummaryCard
+          title="Total Students"
+          value={loading ? "…" : stats.totalStudents}
+          index={1}
+          onClick={() => openSection("students")}
+        />
+        <SummaryCard
+          title="Assignments Posted"
+          value={loading ? "…" : stats.assignmentsPosted}
+          index={2}
+          onClick={() => openSection("homework")}
+        />
       </div>
 
       {error && <div style={styles.error}>{error}</div>}
+
+      {activeSection ? (
+        <Modal
+          title={modalTitle}
+          onClose={handleCloseDetails}
+          searchTerm={searchTerm}
+          onSearchChange={handleSearchChange}
+          searchPlaceholder={modalSearchPlaceholder}
+        >
+          {renderTableContent()}
+        </Modal>
+      ) : (
+        <div style={styles.placeholderSection}>
+          <div style={styles.placeholderIcon}>📊</div>
+          <p style={styles.placeholderText}>Click a card above to view details</p>
+        </div>
+      )}
 
       {/* Analytics panel — sits below summary cards */}
       {teacherId && <AnalyticsPanel teacherId={teacherId} />}
@@ -617,6 +912,64 @@ const styles = {
     padding: "8px 10px",
     fontSize: 13,
     marginBottom: 16,
+  },
+  placeholderSection: {
+    marginTop: 4,
+    marginBottom: 22,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#f3f6fb",
+    color: "#374151",
+    width: "fit-content",
+    maxWidth: 520,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxShadow: "0 4px 12px rgba(16,24,40,0.04)",
+  },
+  placeholderIcon: {
+    fontSize: 18,
+    marginBottom: 0,
+    opacity: 0.9,
+  },
+  placeholderText: {
+    color: "#4b5563",
+    fontSize: 14,
+    margin: 0,
+  },
+  placeholderContainer: {
+    padding: 28,
+    textAlign: "center",
+  },
+  errorContainer: {
+    padding: 20,
+    background: "#fff4f4",
+    borderRadius: 8,
+    border: "1px solid #ffd2d2",
+  },
+  errorText: {
+    color: "#9b1c1c",
+    margin: 0,
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 14,
+  },
+  th: {
+    textAlign: "left",
+    padding: "10px 12px",
+    borderBottom: "2px solid #e0e4e8",
+    color: "#425266",
+    fontWeight: 700,
+  },
+  td: {
+    padding: "10px 12px",
+    borderBottom: "1px solid #e0e4e8",
+    color: "#213547",
   },
 };
 

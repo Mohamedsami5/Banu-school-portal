@@ -158,6 +158,7 @@ export default function ManageStudents() {
       parentName: student.parentName || "",
       parentEmail: student.parentEmail || ""
     });
+    setPassword(student.password || "");
     setShowForm(true);
     setShowModal(false);
   };
@@ -193,7 +194,8 @@ export default function ManageStudents() {
   };
 
   const handleCancel = () => {
-    setFormData({ rollNo: "", name: "", email: "", className: "", parentName: "", parentEmail: "" });
+    setFormData({ rollNo: "", name: "", email: "", className: "", section: "A", parentName: "", parentEmail: "" });
+    setPassword("");
     setShowForm(false);
     setShowModal(false);
     setSelectedStudent(null);
@@ -229,43 +231,53 @@ export default function ManageStudents() {
           <h3 style={styles.formTitle}>
             {selectedStudent ? "Edit Student" : "Add New Student"}
           </h3>
-          <form onSubmit={handleSubmit} style={styles.form}>
+          <form onSubmit={handleSubmit} style={styles.form} autoComplete="off">
 
              <input
               type="text"
+              name="studentRollNo"
               placeholder="Roll No"
               value={formData.rollNo}
               onChange={(e) => setFormData({ ...formData, rollNo: e.target.value })}
               required
+              autoComplete="off"
               style={styles.input}
             />
 
             <input
               type="text"
+              name="studentName"
               placeholder="Student Name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
+              autoComplete="off"
               style={styles.input}
             />
             <input
               type="email"
+              name="studentEmail"
               placeholder="Student Email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              autoComplete="off"
               style={styles.input}
             />
-            {!selectedStudent && (
-              <input
-                type="password"
-                placeholder="Student Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={styles.input}
-              />
-            )}
+            <input
+              type={selectedStudent ? "text" : "password"}
+              name="studentPassword"
+              placeholder={selectedStudent ? "Student Password (read-only)" : "Student Password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required={!selectedStudent}
+              readOnly={!!selectedStudent}
+              autoComplete={selectedStudent ? "off" : "new-password"}
+              style={{
+                ...styles.input,
+                backgroundColor: selectedStudent ? "#eef2ff" : styles.input.backgroundColor,
+              }}
+            />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <select
                 value={formData.className}
@@ -373,6 +385,10 @@ export default function ManageStudents() {
               <div style={styles.detailRow}>
                 <strong>Email:</strong>
                 <span>{selectedStudent.email}</span>
+              </div>
+              <div style={styles.detailRow}>
+                <strong>Password:</strong>
+                <span>{selectedStudent.password}</span>
               </div>
               <div style={styles.detailRow}>
                 <strong>Class:</strong>

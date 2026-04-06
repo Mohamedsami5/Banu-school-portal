@@ -27,10 +27,16 @@ export default function StudentSidebar({
       <nav style={styles.nav}>
         {items.map((it) => {
           const isActive = active === it.id;
+          const iconNode =
+            it.icon ||
+            (typeof it.label === "string" && it.label.trim()
+              ? it.label.trim().slice(0, 1).toUpperCase()
+              : "•");
 
           return (
             <div
               key={it.id}
+              className="sidebar-item"
               style={{
                 ...styles.item,
                 padding: isCollapsed ? "14px" : "14px 16px",
@@ -46,13 +52,21 @@ export default function StudentSidebar({
               onClick={() => onNavigate(it.id)}
               title={isCollapsed ? it.label : ""}
             >
+              <span
+                style={{
+                  ...styles.iconWrap,
+                  ...(isActive ? { color: it.color } : {}),
+                }}
+                aria-hidden="true"
+              >
+                {typeof iconNode === "string" ? <span style={styles.iconText}>{iconNode}</span> : iconNode}
+              </span>
+
               {!isCollapsed && (
                 <span
                   style={{
                     ...styles.label,
-                    ...(isActive
-                      ? { color: it.color, fontWeight: 600 }
-                      : {}),
+                    ...(isActive ? { color: it.color, fontWeight: 700 } : {}),
                   }}
                 >
                   {it.label}
@@ -88,7 +102,25 @@ const styles = {
     color: "#213547",
     display: "flex",
     alignItems: "center",
+    gap: 12,
     transition: "all 0.2s ease",
+  },
+  iconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#f8fafc",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    color: "#64748b",
+    flexShrink: 0,
+  },
+  iconText: {
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: "0.02em",
   },
   label: {
     fontSize: 14,

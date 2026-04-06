@@ -127,10 +127,48 @@
   color: #d1d5db;
 }
 
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.password-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+}
+
+.password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.2);
+}
+
 /* Role Selector */
 .role-selector {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
@@ -180,6 +218,39 @@
   font-size: 13px;
   font-weight: 500;
   text-align: center;
+}
+
+.notice-message {
+  padding: 12px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -10px;
+}
+
+.forgot-link {
+  border: none;
+  background: transparent;
+  color: #4facfe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.forgot-link:hover {
+  color: #00f2fe;
 }
 
 /* Login Button */
@@ -235,6 +306,6 @@
   }
 
   .role-selector {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }

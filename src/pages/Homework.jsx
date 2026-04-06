@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { API_BASE } from "../config/api";
 
 export default function Homework() {
   const [teacher, setTeacher] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   // Homework state
   const [assignments, setAssignments] = useState([]);
@@ -28,8 +29,6 @@ export default function Homework() {
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const didLoadRef = useRef(false);
-
   // Class and section options
   const CLASS_OPTIONS = ["LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
   const SECTION_OPTIONS = ["A", "B", "C"];
@@ -46,44 +45,67 @@ export default function Homework() {
     }
   }, []);
 
-  const teacherId = teacher?._id;
+  const teacherId = teacher?._id || teacher?.id || teacher?.teacherId || teacher?.userId || "";
 
   // Fetch assignments
   const fetchAssignments = async () => {
     if (!teacherId) return;
     try {
+      setLoadError("");
       const res = await fetch(`${API_BASE}/teacher/assignments?teacherId=${encodeURIComponent(teacherId)}`);
-      const data = await res.json().catch(() => []);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Failed to fetch assignments");
       setAssignments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch assignments", err);
+      setLoadError(err.message || "Failed to fetch assignments");
       setAssignments([]);
     }
   };
 
   // Fetch homework
   const fetchHomework = async () => {
-    if (!teacherId) return;
     try {
-      const res = await fetch(`${API_BASE}/homework?teacherId=${encodeURIComponent(teacherId)}`);
-      const data = await res.json().catch(() => []);
+      setLoadError("");
+      const url = teacherId
+        ? `${API_BASE}/homework?teacherId=${encodeURIComponent(teacherId)}`
+        : `${API_BASE}/homework`;
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Failed to fetch homework");
       setHomeworkList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch homework", err);
+      setLoadError(err.message || "Failed to fetch homework");
       setHomeworkList([]);
     }
   };
 
   useEffect(() => {
-    if (!teacherId) return;
-    if (didLoadRef.current) return;
-    didLoadRef.current = true;
+    if (!teacher) return;
+    if (!teacherId) {
+      setLoadError("Teacher session is missing an id. Please logout and login again.");
+      return;
+    }
+    setLoadError("");
     fetchAssignments();
     fetchHomework();
-  }, [teacherId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherId, teacher]);
 
   // Subject options specifically for the Homework form
   const normalizeLocal = (v) => String(v || "").trim().toLowerCase();
+  const inferHomeworkType = (cls) => {
+    const raw = String(cls || "").trim();
+    const upper = raw.toUpperCase();
+    if (upper === "LKG" || upper === "UKG" || upper === "KG") return "Assignment";
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n)) return "Homework";
+    if (n >= 1 && n <= 6) return "Assignment";
+    if (n >= 7 && n <= 9) return "Homework";
+    if (n >= 10 && n <= 12) return "Test Submission";
+    return "Homework";
+  };
   const hwSubjectOptions = [...new Set(
     (assignments || [])
       .filter(
@@ -97,6 +119,11 @@ export default function Homework() {
 
   const handleAssignHomework = async (e) => {
     e.preventDefault();
+    if (!teacherId) {
+      setHwMessage("Teacher session not found. Please logout and login again.");
+      setTimeout(() => setHwMessage(""), 3500);
+      return;
+    }
     const { className, subject, title, description, dueDate } = hwForm;
     if (!className || !subject || !title || !description || !dueDate) {
       setHwMessage("Please fill in Class, Section, Subject, Title, Description, and Due Date");
@@ -109,6 +136,7 @@ export default function Homework() {
         teacherId,
         className,
         section: hwForm.section,
+        type: inferHomeworkType(className),
         subject,
         title,
         description,
@@ -220,6 +248,11 @@ export default function Homework() {
   return (
     <div>
       <h2 style={styles.pageTitle}>Homework</h2>
+      {loadError && (
+        <div style={styles.errorBanner}>
+          {loadError}
+        </div>
+      )}
       <section style={styles.card}>
         <h3 style={styles.sectionTitle}>Assign Homework</h3>
         <form onSubmit={handleAssignHomework} style={styles.formGrid}>
@@ -560,6 +593,15 @@ const styles = {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
+  },
+  errorBanner: {
+    padding: "12px 16px",
+    backgroundColor: "#fef2f2",
+    color: "#dc2626",
+    borderRadius: 10,
+    marginBottom: 16,
+    fontSize: 14,
+    border: "1px solid #fecaca",
   },
   card: {
     background: "linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)",

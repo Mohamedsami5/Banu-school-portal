@@ -7,6 +7,7 @@ export default function StudentDashboardOverview({ user }) {
   const rollNo = user?.rollNo || "";
   const className = user?.className || "";
   const section = user?.section || "";
+  const studentId = user?.userId || user?._id || "";
 
   const [stats, setStats] = useState({
     marks: 0,
@@ -22,6 +23,36 @@ export default function StudentDashboardOverview({ user }) {
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNotifications() {
+      if (!studentId) return;
+
+      setNotificationsLoading(true);
+      setNotificationsError("");
+
+      try {
+        const res = await fetch(`${API_BASE}/notifications/${studentId}?role=student`);
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data?.message || "Failed to load notifications");
+        if (!cancelled) setNotifications(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (!cancelled) setNotificationsError(err.message || "Failed to load notifications");
+      } finally {
+        if (!cancelled) setNotificationsLoading(false);
+      }
+    }
+
+    loadNotifications();
+    return () => {
+      cancelled = true;
+    };
+  }, [studentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,6 +330,27 @@ export default function StudentDashboardOverview({ user }) {
       </div>
 
       {error && <div style={styles.error}>{error}</div>}
+      {notificationsError && <div style={styles.error}>{notificationsError}</div>}
+
+      <div style={styles.block}>
+        <h3 style={styles.blockTitle}>Notifications</h3>
+        {notificationsLoading ? (
+          <p style={styles.muted}>Loading...</p>
+        ) : notifications.length === 0 ? (
+          <p style={styles.muted}>No notifications yet.</p>
+        ) : (
+          <ul style={styles.notifList}>
+            {notifications.slice(0, 8).map((n) => (
+              <li key={n._id} style={styles.notifItem}>
+                <div style={styles.notifMessage}>{n.message}</div>
+                <div style={styles.notifMeta}>
+                  {n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div style={styles.placeholderSection}>
         <div style={styles.placeholderIcon}>📊</div>
@@ -445,5 +497,46 @@ const styles = {
     fontSize: 13,
     border: "1px solid #fecaca",
     marginBottom: 12,
+  },
+  block: {
+    background: "white",
+    borderRadius: 12,
+    padding: 16,
+    boxShadow: "0 4px 16px rgba(102, 126, 234, 0.1)",
+    marginBottom: 16,
+  },
+  blockTitle: {
+    fontSize: 18,
+    margin: "0 0 12px 0",
+    color: "#213547",
+  },
+  muted: {
+    color: "#6b7280",
+    fontSize: 14,
+    margin: 0,
+  },
+  notifList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  notifItem: {
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    padding: "10px 12px",
+    background: "#f9fafb",
+  },
+  notifMessage: {
+    color: "#213547",
+    fontSize: 14,
+    lineHeight: 1.35,
+  },
+  notifMeta: {
+    marginTop: 6,
+    color: "#6b7280",
+    fontSize: 12,
   },
 };

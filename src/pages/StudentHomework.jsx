@@ -271,7 +271,7 @@ export default function StudentHomework({ user }) {
               </div>
               {hw.description && <p style={styles.desc}>{hw.description}</p>}
               <div style={styles.meta}>
-                <span>Due: {formatDate(hw.dueDate)}</span>
+                <span>Due: {formatDate(hw.dueDate)}</span>
               </div>
             </div>
           ))}

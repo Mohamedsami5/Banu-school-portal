@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { useState } from "react";
 
 // Pages
-import HomePage from "./pages/HomePage";
 import PublicLoginPage from "./pages/PublicLoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherLayout from "./pages/TeacherLayout";
@@ -17,6 +16,7 @@ import TeacherHomeworkSubmissions from "./pages/TeacherHomeworkSubmissions";
 import ParentFeedback from "./pages/ParentFeedback";
 import StudentFeedback from "./pages/StudentFeedback";
 import StudentDashboard from "./pages/StudentDashboard";
+import ParentDashboard from "./pages/ParentDashboard";
 import LeaveRequests from "./pages/LeaveRequests";
 
 function App() {
@@ -27,7 +27,7 @@ function App() {
       {toast && <div style={styles.toast}>{toast}</div>}
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<PublicLoginPage />} />
 
         {/* Admin Dashboard */}
@@ -50,11 +50,12 @@ function App() {
         <Route path="/student/dashboard" element={<StudentDashboard />} />
 
         {/* Parent / Student */}
+        <Route path="/parent/dashboard" element={<ParentDashboard />} />
         <Route path="/parent/feedback" element={<ParentFeedback />} />
         <Route path="/student/feedback" element={<StudentFeedback />} />
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

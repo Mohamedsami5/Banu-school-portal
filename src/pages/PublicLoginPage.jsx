@@ -12,6 +12,8 @@ export default function PublicLoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -19,9 +21,11 @@ export default function PublicLoginPage() {
       ...prev,
       [name]: value,
     }));
-    // Clear error when user starts typing or changes form data
     if (error) {
       setError("");
+    }
+    if (notice) {
+      setNotice("");
     }
   };
 
@@ -29,6 +33,7 @@ export default function PublicLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
 
     try {
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -39,12 +44,10 @@ export default function PublicLoginPage() {
         body: JSON.stringify(formData),
       });
 
-      // Check if response is ok before trying to parse JSON
       let data;
       try {
         data = await response.json();
       } catch (parseError) {
-        // If JSON parsing fails, the server might be down or returning invalid response
         if (!response.ok) {
           setError("Cannot reach the server. Please make sure the backend is running.");
         } else {
@@ -60,21 +63,24 @@ export default function PublicLoginPage() {
         return;
       }
 
-      // Store user data in localStorage
       localStorage.setItem("user", JSON.stringify(data));
 
-      // Navigate to appropriate dashboard
       if (data.role === "admin") {
         navigate("/admin/dashboard");
       } else if (data.role === "teacher") {
         navigate("/teacher/dashboard");
       } else if (data.role === "student") {
         navigate("/student/dashboard");
+      } else if (data.role === "parent") {
+        navigate("/parent/dashboard");
       }
     } catch (err) {
       console.error("Login error:", err);
-      // TypeError: Failed to fetch → backend is not reachable
-      if (err instanceof TypeError && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("network"))) {
+      // TypeError: Failed to fetch -> backend is not reachable
+      if (
+        err instanceof TypeError &&
+        (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("network"))
+      ) {
         setError("Cannot reach the server. Please make sure the backend is running.");
       } else {
         setError("An error occurred. Please try again.");
@@ -88,14 +94,7 @@ export default function PublicLoginPage() {
       <div className="login-bg-gradient"></div>
 
       <div className="login-container">
-        {/* Back Button */}
-        <button className="back-button" onClick={() => navigate("/")}>
-          ← Back to Home
-        </button>
-
-        {/* Login Card */}
         <div className="login-card">
-          {/* Header */}
           <div className="login-header">
             <div className="login-logo">
               <svg width="50" height="50" viewBox="0 0 40 40" fill="none">
@@ -120,9 +119,7 @@ export default function PublicLoginPage() {
             <p className="login-subtitle">Login to your account</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="login-form">
-            {/* Role Selection */}
             <div className="form-group">
               <label className="form-label">Login As</label>
               <div className="role-selector">
@@ -156,15 +153,24 @@ export default function PublicLoginPage() {
                   />
                   <span className="role-label">Student</span>
                 </label>
+                <label className="role-option">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="parent"
+                    checked={formData.role === "parent"}
+                    onChange={handleChange}
+                  />
+                  <span className="role-label">Parent</span>
+                </label>
               </div>
             </div>
 
-            {/* Email Field */}
             <div className="form-group">
               <label htmlFor="email" className="form-label">
                 Email
               </label>
-              <input
+                <input
                 type="email"
                 id="email"
                 name="email"
@@ -173,40 +179,98 @@ export default function PublicLoginPage() {
                 placeholder="your.email@example.com"
                 className="form-input"
                 required
-              />
+                />
             </div>
 
-            {/* Password Field */}
             <div className="form-group">
               <label htmlFor="password" className="form-label">
                 Password
               </label>
+              <div className="password-field">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 id="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="form-input"
+                className="form-input password-input"
                 required
               />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M3 3l18 18"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M10.58 10.58A2 2 0 0 0 12 16a2 2 0 0 0 1.42-.58"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9.88 5.1A10.4 10.4 0 0 1 12 4c5 0 9.27 3.11 11 8-0.55 1.56-1.4 2.95-2.48 4.07M6.11 6.11C4.1 7.46 2.58 9.5 1 12c1.73 4.89 6 8 11 8 1.09 0 2.14-.15 3.14-.43"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M1 12c1.73-4.89 6-8 11-8s9.27 3.11 11 8c-1.73 4.89-6 8-11 8S2.73 16.89 1 12Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
-            {/* Error Message */}
-            {error && <div className="error-message">{error}</div>}
+            {formData.role !== "admin" && (
+              <div className="forgot-row">
+                <button
+                  type="button"
+                  className="forgot-link"
+                  onClick={() => setNotice("Please contact the administration to reset your password.")}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            )}
 
-            {/* Submit Button */}
+            {error && <div className="error-message">{error}</div>}
+            {notice && !error && <div className="notice-message">{notice}</div>}
+
             <button type="submit" className="login-button" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
             </button>
           </form>
 
-          {/* Footer */}
           <div className="login-footer">
-            <p className="login-footer-text">
-              First time? Contact the administration for your credentials.
-            </p>
+            <p className="login-footer-text">First time? Contact the administration for your credentials.</p>
           </div>
         </div>
       </div>

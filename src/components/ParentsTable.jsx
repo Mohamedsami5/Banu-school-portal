@@ -5,7 +5,7 @@ export default function ParentsTable({ data = [], onView, onEdit, onDelete }) {
     <table style={styles.table}>
       <thead>
         <tr>
-          <th style={styles.th}>Name</th>
+          <th style={styles.th}>Parent Name</th>
           <th style={styles.th}>Email</th>
           <th style={styles.th}>Student Name</th>
           <th style={styles.th}>Class</th>
@@ -15,7 +15,7 @@ export default function ParentsTable({ data = [], onView, onEdit, onDelete }) {
       <tbody>
         {data.map((p) => (
           <tr key={p.id} className="parent-table-row" style={styles.tr}>
-            <td style={styles.td}>{p.name}</td>
+            <td style={styles.td}>{p.parentName || p.name}</td>
             <td style={styles.td}>{p.email}</td>
             <td style={styles.td}>{p.studentName}</td>
             <td style={styles.td}>{p.className}</td>

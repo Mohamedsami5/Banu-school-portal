@@ -10,6 +10,15 @@ const checkMongoConnection = () => {
   }
 };
 
+const requireAdminRole = (req, res) => {
+  const role = String(req.header("x-user-role") || "").trim().toLowerCase();
+  if (role !== "admin") {
+    res.status(403).json({ message: "Admin access required" });
+    return false;
+  }
+  return true;
+};
+
 // GET /api/announcements - List all announcements (latest first)
 router.get("/", async (req, res) => {
   try {
@@ -27,9 +36,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/announcements - Add a new announcement
+// POST /api/announcements - Add a new announcement (admin only)
 router.post("/", async (req, res) => {
   try {
+    if (!requireAdminRole(req, res)) return;
     checkMongoConnection();
 
     const { title, description, priority, createdBy } = req.body;
@@ -59,9 +69,10 @@ router.post("/", async (req, res) => {
   }
 });
 
-// DELETE /api/announcements/:id - Delete an announcement
+// DELETE /api/announcements/:id - Delete an announcement (admin only)
 router.delete("/:id", async (req, res) => {
   try {
+    if (!requireAdminRole(req, res)) return;
     checkMongoConnection();
 
     const { id } = req.params;

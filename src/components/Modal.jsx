@@ -1,6 +1,13 @@
 import React from "react";
 
-export default function Modal({ title, children, onClose, searchTerm, onSearchChange }) {
+export default function Modal({
+  title,
+  children,
+  onClose,
+  searchTerm,
+  onSearchChange,
+  searchPlaceholder = "Search by name or email",
+}) {
   return (
     <div style={styles.backdrop} onMouseDown={onClose}>
       <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
@@ -13,7 +20,7 @@ export default function Modal({ title, children, onClose, searchTerm, onSearchCh
           <input
             value={searchTerm}
             onChange={onSearchChange}
-            placeholder="Search by name or email"
+            placeholder={searchPlaceholder}
             style={styles.searchInput}
           />
         </div>

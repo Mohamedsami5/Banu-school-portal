@@ -12,11 +12,13 @@ import Mark from "./models/Mark.js";
 import Homework from "./models/Homework.js";
 import HomeworkSubmission from "./models/HomeworkSubmission.js";
 import LeaveApplication from "./models/LeaveApplication.js";
+import Notification from "./models/Notification.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import eventsRoutes from "./routes/eventsRoutes.js";
 import homeworkUpload from "./config/multerHomework.js";
+import { login as authLogin } from "./controllers/authController.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -184,89 +186,29 @@ app.get("/health", (req, res) => {
 });
 
 // Auth login – single endpoint for admin and teacher
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    // Fail fast with a clear message if the DB is not ready
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ message: "Server is starting up. Please try again in a moment." });
-    }
-
-    const { email, password, role } = req.body;
-    const normalizedEmail    = (email    && String(email).trim().toLowerCase()) || "";
-    const normalizedPassword = (password && String(password).trim())            || "";
-
-    if (!normalizedEmail || !normalizedPassword) {
-      return res.status(400).json({ message: "Email and password are required" });
-    }
-    if (!role || (role !== "admin" && role !== "teacher" && role !== "student")) {
-      return res.status(400).json({ message: "Role must be admin, teacher or student" });
-    }
-
-    if (role === "admin") {
-      const admin = await Admin.findOne({
-        email: normalizedEmail,
-        password: normalizedPassword
-      });
-      if (!admin) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      const user = admin.toObject ? admin.toObject() : { ...admin };
-      delete user.password;
-      const out = { ...user, role: "admin" };
-      return res.json(out);
-    }
-
-    if (role === "teacher") {
-      const teacher = await Teacher.findOne({ email: normalizedEmail });
-      if (!teacher) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      const storedPassword = teacher.password || "";
-      const passwordMatch = storedPassword.startsWith("$2")
-        ? bcrypt.compareSync(normalizedPassword, storedPassword)
-        : storedPassword === normalizedPassword;
-      if (!passwordMatch) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      const user = teacher.toObject ? teacher.toObject() : { ...teacher };
-      delete user.password;
-      const out = { ...user, role: "teacher" };
-      return res.json(out);
-    }
-
-    if (role === "student") {
-      const student = await Student.findOne({ email: normalizedEmail });
-      if (!student) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      const storedPassword = student.password || "";
-      const passwordMatch = storedPassword.startsWith("$2")
-        ? bcrypt.compareSync(normalizedPassword, storedPassword)
-        : storedPassword === normalizedPassword;
-      if (!passwordMatch) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      const user = student.toObject ? student.toObject() : { ...student };
-      delete user.password;
-      const out = {
-        ...user,
-        role: "student",
-        userId: user._id,
-        email: user.email,
-      };
-      return res.json(out);
-    }
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Login failed" });
-  }
-});
+app.post("/api/auth/login", authLogin);
 
 // Helper function to check MongoDB connection
 const checkMongoConnection = () => {
   if (mongoose.connection.readyState !== 1) {
     throw new Error("MongoDB not connected. Connection state: " + mongoose.connection.readyState);
   }
+};
+
+// Homework type inference (no manual selection in UI)
+// Class 1–6 -> Assignment, 7–9 -> Homework, 10–12 -> Test Submission
+const inferHomeworkType = (className) => {
+  const raw = String(className || "").trim();
+  const upper = raw.toUpperCase();
+
+  if (upper === "LKG" || upper === "UKG" || upper === "KG") return "Assignment";
+
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n)) return "Homework";
+  if (n >= 1 && n <= 6) return "Assignment";
+  if (n >= 7 && n <= 9) return "Homework";
+  if (n >= 10 && n <= 12) return "Test Submission";
+  return "Homework";
 };
 
 // Teacher routes
@@ -589,6 +531,43 @@ app.get("/api/students", async (req, res) => {
   }
 });
 
+// GET /api/notifications/:userId - List notifications for a user (optional query: role=student|parent)
+app.get("/api/notifications/:userId", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { userId } = req.params;
+    const { role } = req.query;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+      return res.status(400).json({ message: "Invalid userId" });
+    }
+
+    const filter = { userId };
+    if (role) {
+      const r = String(role).trim().toLowerCase();
+      if (r !== "student" && r !== "parent") {
+        return res.status(400).json({ message: "role must be student or parent" });
+      }
+      filter.role = r;
+    }
+
+    const notifications = await Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    res.json(Array.isArray(notifications) ? notifications : []);
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    if (error.message.includes("MongoDB not connected")) {
+      res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    } else {
+      res.status(500).json({ message: "Error fetching notifications", error: error.message });
+    }
+  }
+});
+
 // Leave application routes
 // POST /api/leave/apply - student applies for leave
 app.post("/api/leave/apply", async (req, res) => {
@@ -665,11 +644,24 @@ app.post("/api/leave/apply", async (req, res) => {
 app.get("/api/leave", async (req, res) => {
   try {
     checkMongoConnection();
-    const { studentId, status, className, section } = req.query;
+    const { studentId, studentIds, status, className, section } = req.query;
 
     const filter = {};
-    if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
-      filter.studentId = studentId;
+    const ids = [];
+    if (studentId && mongoose.Types.ObjectId.isValid(String(studentId))) {
+      ids.push(String(studentId));
+    }
+    if (studentIds) {
+      const raw = Array.isArray(studentIds) ? studentIds.join(",") : String(studentIds);
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => mongoose.Types.ObjectId.isValid(s))
+        .forEach((s) => ids.push(s));
+    }
+    if (ids.length > 0) {
+      const uniq = Array.from(new Set(ids));
+      filter.studentId = uniq.length === 1 ? uniq[0] : { $in: uniq };
     }
     if (status) {
       filter.status = String(status).trim();
@@ -909,7 +901,7 @@ app.get("/api/parents", async (req, res) => {
   try {
     checkMongoConnection();
 
-    const parents = await Parent.find().sort({ createdAt: -1 });
+    const parents = await Parent.find().select("-password").sort({ createdAt: -1 });
     res.json(Array.isArray(parents) ? parents : []);
   } catch (error) {
     console.error("Error fetching parents:", error);
@@ -926,21 +918,77 @@ app.post("/api/parents", async (req, res) => {
   try {
     checkMongoConnection();
 
-    const { name, email, studentName, className } = req.body;
+    const {
+      parentName,
+      name,
+      email,
+      password,
+      studentId,
+      studentIds,
+      studentName,
+      className,
+      section,
+    } = req.body || {};
 
-    if (!name || !email || !studentName || !className) {
-      return res.status(400).json({ message: "Name, email, studentName, and className are required" });
+    const finalParentName = (parentName || name || "").trim();
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const normalizedPassword = (password || "").trim();
+
+    const idsFromBody = Array.isArray(studentIds) ? studentIds : (studentIds ? [studentIds] : []);
+    const rawIds = [
+      ...(studentId ? [studentId] : []),
+      ...idsFromBody,
+    ];
+
+    const normalizedStudentIds = rawIds
+      .map((v) => String(v || "").trim())
+      .filter((v) => mongoose.Types.ObjectId.isValid(v));
+
+    // De-dupe while preserving order
+    const seen = new Set();
+    const finalStudentIds = normalizedStudentIds.filter((id) => {
+      const key = String(id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    if (!finalParentName || !normalizedEmail || !normalizedPassword || finalStudentIds.length === 0) {
+      return res.status(400).json({
+        message: "parentName, email, password and studentIds are required",
+      });
+    }
+
+    const hashedPassword = normalizedPassword.startsWith("$2")
+      ? normalizedPassword
+      : bcrypt.hashSync(normalizedPassword, 10);
+
+    const primaryStudentId = finalStudentIds[0];
+    const primaryStudent = await Student.findById(primaryStudentId)
+      .select("_id name className section")
+      .lean();
+
+    if (!primaryStudent) {
+      return res.status(400).json({ message: "Invalid studentIds: student not found" });
     }
 
     const parent = new Parent({
-      name,
-      email,
-      studentName,
-      className
+      parentName: finalParentName,
+      name: finalParentName,
+      email: normalizedEmail,
+      password: hashedPassword,
+      studentIds: finalStudentIds,
+      // Legacy fields (keep for older UI)
+      studentId: primaryStudent._id,
+      studentName: String(primaryStudent.name || studentName || "").trim(),
+      className: String(primaryStudent.className || className || "").trim(),
+      section: String(primaryStudent.section || section || "").trim(),
     });
 
     const savedParent = await parent.save();
-    res.status(201).json(savedParent);
+    const out = savedParent.toObject ? savedParent.toObject() : { ...savedParent };
+    delete out.password;
+    res.status(201).json(out);
   } catch (error) {
     console.error("Error creating parent:", error);
     if (error.message.includes("MongoDB not connected")) {
@@ -1994,7 +2042,12 @@ app.get("/api/homework", async (req, res) => {
     
     // Build filter object with only defined values
     const filter = {};
-    if (teacherId) filter.teacherId = teacherId;
+    if (teacherId) {
+      if (!mongoose.Types.ObjectId.isValid(String(teacherId))) {
+        return res.status(400).json({ message: "Invalid teacherId" });
+      }
+      filter.teacherId = teacherId;
+    }
     if (className) filter.className = String(className).trim();
     if (section) filter.section = String(section).trim();
     
@@ -2003,14 +2056,67 @@ app.get("/api/homework", async (req, res) => {
       console.log("GET /api/homework filter:", filter);
     }
     
-    const hw = await Homework.find(filter).sort({ createdAt: -1 });
-    res.json(Array.isArray(hw) ? hw : []);
+    const hw = await Homework.find(filter).sort({ createdAt: -1 }).lean();
+    const out = (Array.isArray(hw) ? hw : []).map((h) => ({
+      ...h,
+      // Backward compatibility: older records may not have a saved type
+      type: h?.type || "Homework",
+    }));
+    res.json(out);
   } catch (error) {
     console.error("Error fetching homework:", error);
     if (error.message && error.message.includes('MongoDB not connected')) {
       return res.status(503).json({ message: "Database connection unavailable", error: error.message });
     }
     res.status(500).json({ message: "Error fetching homework", error: error.message });
+  }
+});
+
+// GET /api/parent/homework - list homework for multiple children (studentIds required)
+// Query params: studentIds (comma-separated ObjectIds)
+app.get("/api/parent/homework", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { studentIds } = req.query;
+    const raw = Array.isArray(studentIds) ? studentIds.join(",") : String(studentIds || "");
+    const ids = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => mongoose.Types.ObjectId.isValid(s));
+
+    if (ids.length === 0) {
+      return res.status(400).json({ message: "studentIds is required" });
+    }
+
+    const students = await Student.find({ _id: { $in: Array.from(new Set(ids)) } })
+      .select("_id className section")
+      .lean();
+
+    const pairs = new Map();
+    (Array.isArray(students) ? students : []).forEach((s) => {
+      const c = String(s?.className || "").trim();
+      const sec = String(s?.section || "").trim();
+      if (!c || !sec) return;
+      pairs.set(`${c}||${sec}`, { className: c, section: sec });
+    });
+
+    const or = Array.from(pairs.values()).map((p) => ({ className: p.className, section: p.section }));
+    if (or.length === 0) return res.json([]);
+
+    const hw = await Homework.find({ $or: or }).sort({ createdAt: -1 }).lean();
+    const out = (Array.isArray(hw) ? hw : []).map((h) => ({
+      ...h,
+      type: h?.type || "Homework",
+    }));
+
+    return res.json(out);
+  } catch (error) {
+    console.error("Error fetching parent homework:", error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching parent homework", error: error.message });
   }
 });
 
@@ -2101,6 +2207,7 @@ app.post("/api/homework", async (req, res) => {
       teacherEmail: teacher.email || "",
       className: String(className).trim(),
       section: String(section).trim(),
+      type: inferHomeworkType(className),
       subject: String(subject).trim(),
       title: String(title).trim(),
       description: String(description).trim(),
@@ -2109,6 +2216,92 @@ app.post("/api/homework", async (req, res) => {
 
     const saved = await hw.save();
     console.log("Saved homework id:", saved._id);
+
+    // Create notifications for students in the class + their parents
+    try {
+      const students = await Student.find({
+        className: String(className).trim(),
+        section: String(section).trim(),
+      })
+        .select("_id name parentEmail")
+        .lean();
+
+      const studentIds = (Array.isArray(students) ? students : [])
+        .map((s) => s?._id)
+        .filter(Boolean);
+
+      const parentDocs = studentIds.length
+        ? await Parent.find({
+            $or: [
+              { studentId: { $in: studentIds } },
+              { studentIds: { $in: studentIds } },
+            ],
+          }).select("_id studentId studentIds").lean()
+        : [];
+      const parentByStudentId = new Map(
+        (Array.isArray(parentDocs) ? parentDocs : [])
+          .flatMap((p) => {
+            if (!p?._id) return [];
+            const ids = [];
+            if (p.studentId) ids.push(String(p.studentId));
+            if (Array.isArray(p.studentIds)) {
+              p.studentIds.forEach((sid) => {
+                if (sid) ids.push(String(sid));
+              });
+            }
+            const seen = new Set();
+            return ids
+              .filter((sid) => {
+                if (!sid) return false;
+                if (seen.has(sid)) return false;
+                seen.add(sid);
+                return true;
+              })
+              .map((sid) => [sid, p._id]);
+          })
+      );
+
+      const due = dt.toISOString().slice(0, 10);
+      const msg = `New ${saved.type || "Homework"} assigned: ${String(subject).trim()} - ${String(title).trim()} (Due ${due})`;
+
+      const notifications = [];
+
+      for (const s of Array.isArray(students) ? students : []) {
+        if (!s?._id) continue;
+
+        notifications.push({
+          userId: s._id,
+          role: "student",
+          message: msg,
+          read: false,
+        });
+
+        // Prefer dedicated parent accounts, otherwise support legacy parent-login (derived from student)
+        const parentId = parentByStudentId.get(String(s._id));
+        if (parentId) {
+          notifications.push({
+            userId: parentId,
+            role: "parent",
+            message: msg,
+            read: false,
+          });
+        } else {
+          notifications.push({
+            userId: s._id,
+            role: "parent",
+            message: msg,
+            read: false,
+          });
+        }
+      }
+
+      if (notifications.length > 0) {
+        await Notification.insertMany(notifications, { ordered: false });
+      }
+    } catch (notifyErr) {
+      console.error("Error creating homework notifications:", notifyErr);
+    }
+
     res.status(201).json(saved);
   } catch (error) {
     console.error("Error creating homework:", error);
@@ -2317,5 +2510,65 @@ app.get("/api/student/marks", async (req, res) => {
       message: "Error fetching student marks",
       error: error.message
     });
+  }
+});
+
+// GET /api/parent/marks - Get approved marks for multiple children (studentIds required)
+// Query params: studentIds (comma-separated ObjectIds)
+app.get("/api/parent/marks", async (req, res) => {
+  try {
+    checkMongoConnection();
+
+    const { studentIds } = req.query;
+    const raw = Array.isArray(studentIds) ? studentIds.join(",") : String(studentIds || "");
+    const ids = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => mongoose.Types.ObjectId.isValid(s));
+
+    if (ids.length === 0) {
+      return res.status(400).json({ message: "studentIds is required" });
+    }
+
+    const students = await Student.find({ _id: { $in: Array.from(new Set(ids)) } })
+      .select("_id rollNo className section")
+      .lean();
+
+    const studentKeyToId = new Map();
+    const or = [];
+    (Array.isArray(students) ? students : []).forEach((s) => {
+      const rollNo = String(s?.rollNo || "").trim();
+      const className = String(s?.className || "").trim();
+      const section = String(s?.section || "").trim();
+      if (!rollNo || !className || !section) return;
+      const key = `${rollNo}||${className}||${section}`;
+      studentKeyToId.set(key, String(s._id));
+      or.push({
+        rollNo,
+        className,
+        section,
+        status: "Approved",
+      });
+    });
+
+    if (or.length === 0) return res.json([]);
+
+    const marks = await Mark.find({ $or: or })
+      .select("rollNo className section subject examType marks status")
+      .sort({ className: 1, section: 1, rollNo: 1, subject: 1, examType: 1 })
+      .lean();
+
+    const out = (Array.isArray(marks) ? marks : []).map((m) => {
+      const key = `${String(m.rollNo || "").trim()}||${String(m.className || "").trim()}||${String(m.section || "").trim()}`;
+      return { ...m, studentId: studentKeyToId.get(key) || null };
+    });
+
+    return res.json(out);
+  } catch (error) {
+    console.error("Error fetching parent marks:", error);
+    if (error.message && error.message.includes("MongoDB not connected")) {
+      return res.status(503).json({ message: "Database connection unavailable", error: error.message });
+    }
+    return res.status(500).json({ message: "Error fetching parent marks", error: error.message });
   }
 });

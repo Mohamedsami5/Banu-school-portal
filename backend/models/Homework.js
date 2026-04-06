@@ -5,6 +5,7 @@ const HomeworkSchema = new mongoose.Schema({
   teacherEmail: { type: String, default: '' },
   className: { type: String, required: true },
   section: { type: String, required: true },
+  type: { type: String, enum: ["Assignment", "Homework", "Test Submission"] },
   subject: { type: String, required: true },
   title: { type: String, required: true },
   description: { type: String, required: true },

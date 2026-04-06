@@ -4,27 +4,54 @@ import { API_BASE } from "../config/api";
 
 export default function ManageParents() {
   const [parents, setParents] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedParent, setSelectedParent] = useState(null);
-  const CLASS_OPTIONS = ["LKG","UKG", ...Array.from({length:12}, (_,i)=>String(i+1))];
-  const SECTION_OPTIONS = ["A","B","C"];
 
   const [formData, setFormData] = useState({
-    name: "",
+    parentName: "",
     email: "",
+    password: "",
+    studentIds: [],
+    studentId: "",
     studentName: "",
     className: "",
-    section: "A"
+    section: ""
   });
   const [error, setError] = useState("");
 
   // Fetch parents from API on load
   useEffect(() => {
     fetchParents();
+    fetchStudents();
   }, []);
+
+  const fetchStudents = async () => {
+    try {
+      setStudentsLoading(true);
+      const response = await fetch(`${API_BASE}/students`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setStudents(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching students:", err);
+      setStudents([]);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
 
   const fetchParents = async () => {
     try {
@@ -51,8 +78,10 @@ export default function ManageParents() {
 
       const formattedData = data.map((p) => ({
         id: p._id,
-        name: p.name,
+        parentName: p.parentName || p.name,
         email: p.email,
+        studentIds: p.studentIds || (p.studentId ? [p.studentId] : []),
+        studentId: p.studentId,
         studentName: p.studentName,
         className: p.className,
         section: p.section || "A"
@@ -77,7 +106,7 @@ export default function ManageParents() {
     e.preventDefault();
     setError("");
 
-    if (!formData.name.trim() || !formData.email.trim() || !formData.studentName.trim() || !formData.className.trim()) {
+    if (!formData.parentName.trim() || !formData.email.trim() || !Array.isArray(formData.studentIds) || formData.studentIds.length === 0) {
       setError("Please fill in all required fields");
       return;
     }
@@ -88,6 +117,11 @@ export default function ManageParents() {
       return;
     }
 
+    if (!selectedParent && !formData.password.trim()) {
+      setError("Password is required");
+      return;
+    }
+
     if (selectedParent) {
       // Edit: update local state only (no PUT API)
       setParents((prev) =>
@@ -95,7 +129,7 @@ export default function ManageParents() {
           p.id === selectedParent.id ? { ...formData, id: selectedParent.id } : p
         )
       );
-      setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
+      setFormData({ parentName: "", email: "", password: "", studentIds: [], studentId: "", studentName: "", className: "", section: "" });
       setShowForm(false);
       setShowModal(false);
       setSelectedParent(null);
@@ -104,12 +138,13 @@ export default function ManageParents() {
     }
 
     try {
+      const payload = { ...formData };
       const response = await fetch(`${API_BASE}/parents`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -122,14 +157,16 @@ export default function ManageParents() {
         ...prev,
         {
           id: saved._id,
-          name: saved.name,
+          parentName: saved.parentName || saved.name,
           email: saved.email,
+          studentIds: saved.studentIds || (saved.studentId ? [saved.studentId] : []),
+          studentId: saved.studentId,
           studentName: saved.studentName,
           className: saved.className,
           section: saved.section || "A"
         }
       ]);
-      setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
+      setFormData({ parentName: "", email: "", password: "", studentIds: [], studentId: "", studentName: "", className: "", section: "" });
       setShowForm(false);
       setShowModal(false);
       setSelectedParent(null);
@@ -143,8 +180,11 @@ export default function ManageParents() {
   const handleView = (parent) => {
     setSelectedParent(parent);
     setFormData({
-      name: parent.name,
+      parentName: parent.parentName || parent.name,
       email: parent.email,
+      password: "",
+      studentIds: parent.studentIds || (parent.studentId ? [parent.studentId] : []),
+      studentId: parent.studentId || "",
       studentName: parent.studentName,
       className: parent.className,
       section: parent.section || "A"
@@ -156,8 +196,11 @@ export default function ManageParents() {
   const handleEdit = (parent) => {
     setSelectedParent(parent);
     setFormData({
-      name: parent.name,
+      parentName: parent.parentName || parent.name,
       email: parent.email,
+      password: "",
+      studentIds: parent.studentIds || (parent.studentId ? [parent.studentId] : []),
+      studentId: parent.studentId || "",
       studentName: parent.studentName,
       className: parent.className,
       section: parent.section || "A"
@@ -197,11 +240,27 @@ export default function ManageParents() {
   };
 
   const handleCancel = () => {
-    setFormData({ name: "", email: "", studentName: "", className: "", section: "A" });
+    setFormData({ parentName: "", email: "", password: "", studentIds: [], studentId: "", studentName: "", className: "", section: "" });
     setShowForm(false);
     setShowModal(false);
     setSelectedParent(null);
     setError("");
+  };
+
+  const handleStudentsSelect = (selectedIds) => {
+    const ids = Array.isArray(selectedIds) ? selectedIds.filter(Boolean) : [];
+    const primaryId = ids[0] || "";
+    const primary = students.find((s) => String(s._id) === String(primaryId));
+
+    setFormData((prev) => ({
+      ...prev,
+      studentIds: ids,
+      // Legacy fields: keep a primary child for older consumers
+      studentId: primary?._id || primaryId || "",
+      studentName: primary?.name || "",
+      className: primary?.className || "",
+      section: primary?.section || ""
+    }));
   };
 
   return (
@@ -234,8 +293,8 @@ export default function ManageParents() {
             <input
               type="text"
               placeholder="Parent Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              value={formData.parentName}
+              onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
               required
               style={styles.input}
             />
@@ -248,26 +307,46 @@ export default function ManageParents() {
               style={styles.input}
             />
             <input
-              type="text"
-              placeholder="Student Name"
-              value={formData.studentName}
-              onChange={(e) => setFormData({ ...formData, studentName: e.target.value })}
-              required
+              type="password"
+              placeholder={selectedParent ? "Password (leave blank to keep unchanged)" : "Password"}
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required={!selectedParent}
               style={styles.input}
             />
+            <select
+              multiple
+              size={5}
+              value={formData.studentIds}
+              onChange={(e) => handleStudentsSelect(Array.from(e.target.selectedOptions).map((o) => o.value))}
+              style={styles.input}
+              required
+              disabled={studentsLoading}
+            >
+              <option value="" disabled>
+                {studentsLoading ? "Loading students..." : "Select Students (Ctrl/⌘+Click)"}
+              </option>
+              {students.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name} {s.rollNo ? `(${s.rollNo})` : ""}{s.className ? ` - ${s.className}${s.section ? `-${s.section}` : ""}` : ""}
+                </option>
+              ))}
+            </select>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <select value={formData.className} onChange={(e) => setFormData({ ...formData, className: e.target.value })} style={styles.input} required>
-                <option value="">Select Class</option>
-                {CLASS_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <select value={formData.section} onChange={(e) => setFormData({ ...formData, section: e.target.value })} style={styles.input} required>
-                <option value="">Select Section</option>
-                {SECTION_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <input
+                type="text"
+                placeholder="Class"
+                value={formData.className}
+                readOnly
+                style={{ ...styles.input, backgroundColor: "#f8fafc" }}
+              />
+              <input
+                type="text"
+                placeholder="Section"
+                value={formData.section}
+                readOnly
+                style={{ ...styles.input, backgroundColor: "#f8fafc" }}
+              />
             </div>
             <div style={styles.buttonGroup}>
               <button
@@ -323,7 +402,7 @@ export default function ManageParents() {
             <div style={styles.modalContent}>
               <div style={styles.detailRow}>
                 <strong>Parent Name:</strong>
-                <span>{selectedParent.name}</span>
+                <span>{selectedParent.parentName || selectedParent.name}</span>
               </div>
               <div style={styles.detailRow}>
                 <strong>Email:</strong>
@@ -377,7 +456,7 @@ export default function ManageParents() {
               </button>
             </div>
             <div style={styles.modalContent}>
-              <p>Are you sure you want to delete <strong>{selectedParent.name}</strong>?</p>
+              <p>Are you sure you want to delete <strong>{selectedParent.parentName || selectedParent.name}</strong>?</p>
               <p style={styles.warningText}>This action cannot be undone.</p>
             </div>
             <div style={styles.modalFooter}>
