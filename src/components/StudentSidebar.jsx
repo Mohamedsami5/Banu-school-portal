@@ -7,6 +7,7 @@ const studentMenuItems = [
   { id: "events", label: "Events & Achievements", color: "#a855f7" },
   { id: "announcements", label: "Announcements", color: "#fa709a" },
   { id: "leave", label: "Leave Application", color: "#0ea5e9" },
+  { id: "change-password", label: "Change Password", color: "#2563eb" },
   { id: "logout", label: "Logout", color: "#ef5350" },
 ];
 

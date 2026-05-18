@@ -13,6 +13,7 @@ import AssignClasses from "./pages/AssignClasses";
 import EnterMarks from "./pages/EnterMarks";
 import Homework from "./pages/Homework";
 import TeacherHomeworkSubmissions from "./pages/TeacherHomeworkSubmissions";
+import TeacherChangePassword from "./pages/TeacherChangePassword";
 import ParentFeedback from "./pages/ParentFeedback";
 import StudentFeedback from "./pages/StudentFeedback";
 import StudentDashboard from "./pages/StudentDashboard";
@@ -44,6 +45,7 @@ function App() {
           <Route path="homework" element={<Homework />} />
           <Route path="homework-submissions" element={<TeacherHomeworkSubmissions />} />
           <Route path="leave-requests" element={<LeaveRequests />} />
+          <Route path="change-password" element={<TeacherChangePassword />} />
         </Route>
 
         {/* Student Dashboard */}

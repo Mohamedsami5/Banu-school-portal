@@ -373,10 +373,10 @@ export default function StudentDashboardOverview({ user }) {
 
 function DashboardCard({ title, value, index = 0, onClick }) {
   const cardColors = [
-    { gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" },
-    { gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" },
-    { gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" },
-    { gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)" },
+    { gradient: "linear-gradient(135deg, #6b5fd2 0%, #5a4fcf 100%)" },
+    { gradient: "linear-gradient(135deg, #00c2ff 0%, #00a6ff 100%)" },
+    { gradient: "linear-gradient(135deg, #ff6aa2 0%, #ff6f85 100%)" },
+    { gradient: "linear-gradient(135deg, #f7a63c 0%, #f9cf62 100%)" },
   ];
   const scheme = cardColors[index % cardColors.length];
 
@@ -394,7 +394,7 @@ const styles = {
     fontWeight: 700,
     color: "#213547",
     margin: "0 0 8px 0",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    background: "linear-gradient(135deg, #6b5fd2 0%, #5a4fcf 100%)",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   },

@@ -73,6 +73,7 @@ const parentMenuItems = [
   { id: "leave-status", label: "Leave Status", color: "#0ea5e9", icon: icon.leave },
   { id: "events", label: "Events & Achievements", color: "#a855f7", icon: icon.events },
   { id: "profile", label: "Student Profile", color: "#4facfe", icon: icon.profile },
+  { id: "change-password", label: "Change Password", color: "#2563eb", icon: icon.profile },
   { id: "logout", label: "Logout", color: "#ef5350", icon: icon.logout },
 ];
 

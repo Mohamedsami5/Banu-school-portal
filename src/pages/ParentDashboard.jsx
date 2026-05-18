@@ -9,6 +9,7 @@ import ParentHomework from "./ParentHomework";
 import ParentAnnouncements from "./ParentAnnouncements";
 import ParentLeaveStatus from "./ParentLeaveStatus";
 import ParentEventsView from "./ParentEventsView";
+import ChangePasswordCard from "../components/ChangePasswordCard";
 
 export default function ParentDashboard() {
   const navigate = useNavigate();
@@ -77,6 +78,14 @@ export default function ParentDashboard() {
         return <ParentLeaveStatus child={selected} allChildren={children} />;
       case "events":
         return <ParentEventsView />;
+      case "change-password":
+        return (
+          <ChangePasswordCard
+            user={user}
+            title="Change Password"
+            subtitle="Use your current parent password to set a new one."
+          />
+        );
       default:
         return <ParentDashboardOverview child={selected} allChildren={children} parentUser={user} />;
     }

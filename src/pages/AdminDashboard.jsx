@@ -10,6 +10,7 @@ import Announcements from "./Announcements";
 import EventsAchievements from "./EventsAchievements";
 import AdminMarksApproval from "./AdminMarksApproval"; 
 import LeaveRequests from "./LeaveRequests";
+import ChangePasswordCard from "../components/ChangePasswordCard";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -63,8 +64,16 @@ export default function AdminDashboard() {
         return <LeaveRequests />;
       case "marks":                        
         return <AdminMarksApproval />;
+      case "change-password":
+        return (
+          <ChangePasswordCard
+            user={admin}
+            title="Change Password"
+            subtitle="Use your current admin password to create a new one."
+          />
+        );
       default:
-        return <DashboardOverview />;
+        return <DashboardOverview onNavigate={(id) => setPage(id)} />;
     }
   }
 

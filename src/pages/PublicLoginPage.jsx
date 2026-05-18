@@ -12,7 +12,6 @@ export default function PublicLoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
@@ -24,16 +23,12 @@ export default function PublicLoginPage() {
     if (error) {
       setError("");
     }
-    if (notice) {
-      setNotice("");
-    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setNotice("");
 
     try {
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -76,7 +71,6 @@ export default function PublicLoginPage() {
       }
     } catch (err) {
       console.error("Login error:", err);
-      // TypeError: Failed to fetch -> backend is not reachable
       if (
         err instanceof TypeError &&
         (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("network"))
@@ -170,7 +164,7 @@ export default function PublicLoginPage() {
               <label htmlFor="email" className="form-label">
                 Email
               </label>
-                <input
+              <input
                 type="email"
                 id="email"
                 name="email"
@@ -179,7 +173,7 @@ export default function PublicLoginPage() {
                 placeholder="your.email@example.com"
                 className="form-input"
                 required
-                />
+              />
             </div>
 
             <div className="form-group">
@@ -187,16 +181,16 @@ export default function PublicLoginPage() {
                 Password
               </label>
               <div className="password-field">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                className="form-input password-input"
-                required
-              />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className="form-input password-input"
+                  required
+                />
                 <button
                   type="button"
                   className="password-toggle"
@@ -249,20 +243,7 @@ export default function PublicLoginPage() {
               </div>
             </div>
 
-            {formData.role !== "admin" && (
-              <div className="forgot-row">
-                <button
-                  type="button"
-                  className="forgot-link"
-                  onClick={() => setNotice("Please contact the administration to reset your password.")}
-                >
-                  Forgot Password?
-                </button>
-              </div>
-            )}
-
             {error && <div className="error-message">{error}</div>}
-            {notice && !error && <div className="notice-message">{notice}</div>}
 
             <button type="submit" className="login-button" disabled={loading}>
               {loading ? "Logging in..." : "Login"}

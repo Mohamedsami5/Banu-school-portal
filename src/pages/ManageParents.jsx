@@ -289,7 +289,7 @@ export default function ManageParents() {
           <h3 style={styles.formTitle}>
             {selectedParent ? "Edit Parent" : "Add New Parent"}
           </h3>
-          <form onSubmit={handleSubmit} style={styles.form}>
+          <form onSubmit={handleSubmit} style={styles.form} autoComplete="off">
             <input
               type="text"
               placeholder="Parent Name"
@@ -301,6 +301,8 @@ export default function ManageParents() {
             <input
               type="email"
               placeholder="Email"
+              name="parentEmail"
+              autoComplete="off"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
@@ -309,6 +311,8 @@ export default function ManageParents() {
             <input
               type="password"
               placeholder={selectedParent ? "Password (leave blank to keep unchanged)" : "Password"}
+              name="parentPassword"
+              autoComplete="new-password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required={!selectedParent}

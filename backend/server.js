@@ -18,7 +18,10 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import eventsRoutes from "./routes/eventsRoutes.js";
 import homeworkUpload from "./config/multerHomework.js";
-import { login as authLogin } from "./controllers/authController.js";
+import {
+  changePassword as authChangePassword,
+  login as authLogin,
+} from "./controllers/authController.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -185,8 +188,9 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Auth login – single endpoint for admin and teacher
+// Auth routes
 app.post("/api/auth/login", authLogin);
+app.post("/api/auth/change-password", authChangePassword);
 
 // Helper function to check MongoDB connection
 const checkMongoConnection = () => {

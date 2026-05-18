@@ -8,6 +8,7 @@ import StudentHomework from "./StudentHomework";
 import StudentEventsView from "./StudentEventsView";
 import StudentAnnouncementsView from "./StudentAnnouncementsView";
 import StudentLeaveApplication from "./StudentLeaveApplication";
+import ChangePasswordCard from "../components/ChangePasswordCard";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -63,6 +64,14 @@ export default function StudentDashboard() {
         return <StudentAnnouncementsView />;
       case "leave":
         return <StudentLeaveApplication user={user} />;
+      case "change-password":
+        return (
+          <ChangePasswordCard
+            user={user}
+            title="Change Password"
+            subtitle="Use your current student password to set a new one."
+          />
+        );
       default:
         return <StudentDashboardOverview user={user} />;
     }

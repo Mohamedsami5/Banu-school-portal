@@ -60,6 +60,7 @@ export default function TeacherLayout() {
     { id: "homework-submissions", label: "Homework Submissions", color: "#f59e0b" },
     { id: "leave-requests", label: "Leave Requests", color: "#0ea5e9" },
     { id: "profile", label: "Profile", color: "#22c55e" },
+    { id: "change-password", label: "Change Password", color: "#2563eb" },
     { id: "logout", label: "Logout", color: "#ef5350" },
   ];
 
@@ -73,6 +74,7 @@ export default function TeacherLayout() {
     if (p.includes("/teacher/homework")) return "homework";
     if (p.includes("/teacher/leave-requests")) return "leave-requests";
     if (p.includes("/teacher/profile")) return "profile";
+    if (p.includes("/teacher/change-password")) return "change-password";
     return "dashboard";
   };
 
@@ -86,6 +88,7 @@ export default function TeacherLayout() {
     if (id === "homework-submissions") return navigate("/teacher/homework-submissions");
     if (id === "leave-requests") return navigate("/teacher/leave-requests");
     if (id === "profile") return navigate("/teacher/profile");
+    if (id === "change-password") return navigate("/teacher/change-password");
   };
 
   return (
